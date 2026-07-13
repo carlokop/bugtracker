@@ -13,11 +13,12 @@ import { ViewerUrlBar } from "@/components/viewer/ViewerUrlBar";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useFeedbackStore } from "@/store/useFeedbackStore";
-import { useNotificationStore } from "@/store/useNotificationStore";
 import { cn } from "@/lib/utils";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { getDeviceTypeFromOrientation } from "@/lib/device";
-import { isMockPath, normalizeViewerUrl } from "@/lib/viewer-url";
+import { isMockPath, normalizeViewerUrl, getProxyViewerSrc } from "@/lib/viewer-url";
+import * as screenshotsApi from "@/api/screenshots";
+import { ApiError } from "@/api/client";
 import type { FeedbackItem, Project } from "@/types";
 import { DEVICE_TYPE_LABELS } from "@/types";
 
@@ -30,6 +31,12 @@ const VIEWPORT_WIDTHS: Record<ViewportSize, string> = {
   mobile: "375px",
 };
 
+const VIEWPORT_WIDTH_PX: Record<ViewportSize, number> = {
+  desktop: 1280,
+  tablet: 768,
+  mobile: 375,
+};
+
 export function ViewerPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -37,7 +44,7 @@ export function ViewerPage() {
   const convertFeatureId = searchParams.get("convertFeature");
   const deliverFeatureId = searchParams.get("deliverFeature");
   const { currentUser } = useAuthStore();
-  const { getProject } = useProjectStore();
+  const { getProject, updateProject } = useProjectStore();
   const {
     fetchFeedback,
     createBug,
@@ -46,7 +53,6 @@ export function ViewerPage() {
     deliverFeature,
     getFeedbackItem,
   } = useFeedbackStore();
-  const { addNotification } = useNotificationStore();
 
   const [project, setProject] = useState<Project | null>(null);
   const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>([]);
@@ -60,6 +66,11 @@ export function ViewerPage() {
     selector: string;
   } | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string>("");
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const [stagingAuth, setStagingAuth] = useState({ user: "", password: "" });
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [isSavingStagingAuth, setIsSavingStagingAuth] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [activePinId, setActivePinId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [convertItem, setConvertItem] = useState<FeedbackItem | null>(null);
@@ -167,6 +178,9 @@ export function ViewerPage() {
     if (!projectId) return;
     getProject(projectId).then((p) => {
       setProject(p ?? null);
+      if (p?.proxyAuthUser) {
+        setStagingAuth((prev) => ({ ...prev, user: p.proxyAuthUser ?? "" }));
+      }
       if (isSpecialMode) return;
       if (p) {
         const fromQuery = searchParams.get("url");
@@ -196,20 +210,90 @@ export function ViewerPage() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.data?.type === "bugtracker-navigate" &&
+        typeof event.data.url === "string"
+      ) {
+        navigateToUrl(event.data.url);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [navigateToUrl]);
+
   const captureScreenshot = async (): Promise<string> => {
-    if (!contentRef.current) return "";
+    if (isMockPath(pageUrl) && contentRef.current) {
+      try {
+        return await toPng(contentRef.current, {
+          quality: 0.85,
+          pixelRatio: 1,
+          cacheBust: true,
+        });
+      } catch {
+        setScreenshotError("Screenshot mislukt. Probeer opnieuw.");
+        return "";
+      }
+    }
+
+    if (!projectId || !pageUrl) return "";
+
     try {
-      return await toPng(contentRef.current, {
-        quality: 0.85,
-        pixelRatio: 1,
+      const { url } = await screenshotsApi.capturePageScreenshot({
+        url: pageUrl,
+        projectId,
+        width: VIEWPORT_WIDTH_PX[viewport],
       });
-    } catch {
+      setScreenshotError(null);
+      return url;
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Screenshot mislukt. Probeer opnieuw.";
+      setScreenshotError(message);
       return "";
     }
   };
 
+  const retryScreenshot = async () => {
+    if (!pendingPin) return;
+    setIsCapturingScreenshot(true);
+    setScreenshotError(null);
+    const screenshot = await captureScreenshot();
+    setScreenshotPreview(screenshot);
+    setIsCapturingScreenshot(false);
+  };
+
+  const saveStagingAuthAndRetry = async () => {
+    if (!projectId || !stagingAuth.user.trim() || !stagingAuth.password) {
+      setScreenshotError("Vul gebruikersnaam en wachtwoord in.");
+      return;
+    }
+
+    setIsSavingStagingAuth(true);
+    setScreenshotError(null);
+    try {
+      const updated = await updateProject(projectId, {
+        proxyAuthUser: stagingAuth.user.trim(),
+        proxyAuthPassword: stagingAuth.password,
+      });
+      setProject(updated);
+      setStagingAuth((prev) => ({ ...prev, password: "" }));
+      await retryScreenshot();
+    } catch (error) {
+      setScreenshotError(
+        error instanceof ApiError ? error.message : "Opslaan mislukt",
+      );
+    } finally {
+      setIsSavingStagingAuth(false);
+    }
+  };
+
   const handleOverlayClick = async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!canPlaceMarker || pendingPin) return;
+    if (!canPlaceMarker || pendingPin || isCapturingScreenshot) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -217,8 +301,13 @@ export function ViewerPage() {
     const selector = target ? getCssSelector(target) : "unknown";
 
     setPendingPin({ x, y, selector });
+    setScreenshotPreview("");
+    setScreenshotError(null);
+    setSubmitError(null);
+    setIsCapturingScreenshot(true);
     const screenshot = await captureScreenshot();
     setScreenshotPreview(screenshot);
+    setIsCapturingScreenshot(false);
   };
 
   const handleSubmitBug = async (
@@ -227,64 +316,60 @@ export function ViewerPage() {
   ) => {
     if (!pendingPin || !projectId || !currentUser) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    let screenshot = screenshotPreview;
-    if (!screenshot) screenshot = await captureScreenshot();
+    try {
+      let screenshot = screenshotPreview;
+      if (!screenshot) screenshot = await captureScreenshot();
+      if (!screenshot) {
+        setSubmitError("Screenshot is verplicht. Los het screenshot-probleem eerst op.");
+        return;
+      }
 
-    const deviceType = getDeviceTypeFromOrientation();
+      const deviceType = getDeviceTypeFromOrientation();
 
-    if (isConvertMode && convertFeatureId) {
-      const updated = await convertFeatureToBug(convertFeatureId, {
-        pageUrl,
-        cssSelector: pendingPin.selector,
-        x: pendingPin.x,
-        y: pendingPin.y,
-        screenshotUrl: screenshot,
-        problemDescription,
-        definitionOfDone,
-        deviceType,
-      });
+      if (isConvertMode && convertFeatureId) {
+        const updated = await convertFeatureToBug(convertFeatureId, {
+          pageUrl,
+          cssSelector: pendingPin.selector,
+          x: pendingPin.x,
+          y: pendingPin.y,
+          screenshotUrl: screenshot,
+          problemDescription,
+          definitionOfDone,
+          deviceType,
+        });
 
-      await addNotification(
-        project?.adminId ?? "user-admin-1",
-        "status_change",
-        convertFeatureId,
-        "Feature omgezet naar bug door klant",
+        navigate(`/feedback/${updated.id}`);
+        return;
+      }
+
+      await createBug(
+        {
+          projectId,
+          pageUrl,
+          cssSelector: pendingPin.selector,
+          x: pendingPin.x,
+          y: pendingPin.y,
+          screenshotUrl: screenshot,
+          problemDescription,
+          definitionOfDone,
+          deviceType,
+        },
+        currentUser.id,
       );
 
+      setPendingPin(null);
+      setScreenshotPreview("");
+      setScreenshotError(null);
+      loadData();
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError ? error.message : "Bug opslaan mislukt",
+      );
+    } finally {
       setIsSubmitting(false);
-      navigate(`/feedback/${updated.id}`);
-      return;
     }
-
-    const item = await createBug(
-      {
-        projectId,
-        pageUrl,
-        cssSelector: pendingPin.selector,
-        x: pendingPin.x,
-        y: pendingPin.y,
-        screenshotUrl: screenshot,
-        problemDescription,
-        definitionOfDone,
-        deviceType,
-      },
-      currentUser.id,
-    );
-
-    if (currentUser.role === "client") {
-      await addNotification(
-        project?.adminId ?? "user-admin-1",
-        "new_bug",
-        item.id,
-        `Nieuwe feedback op ${project?.name ?? "project"}`,
-      );
-    }
-
-    setPendingPin(null);
-    setScreenshotPreview("");
-    setIsSubmitting(false);
-    loadData();
   };
 
   const handleSubmitFeature = async (
@@ -293,38 +378,49 @@ export function ViewerPage() {
   ) => {
     if (!pendingPin || !projectId || !currentUser) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    const deviceType = getDeviceTypeFromOrientation();
+    try {
+      const deviceType = getDeviceTypeFromOrientation();
 
-    let screenshot = screenshotPreview;
-    if (!screenshot) screenshot = await captureScreenshot();
+      let screenshot = screenshotPreview;
+      if (!screenshot) screenshot = await captureScreenshot();
 
-    const item = await createFeature(
-      {
-        projectId,
-        problemDescription,
-        definitionOfDone,
-        deviceType,
-        pageUrl,
-        cssSelector: pendingPin.selector,
-        x: pendingPin.x,
-        y: pendingPin.y,
-        screenshotUrl: screenshot,
-      },
-      currentUser.id,
-    );
+      const item = await createFeature(
+        {
+          projectId,
+          problemDescription,
+          definitionOfDone,
+          deviceType,
+          pageUrl,
+          cssSelector: pendingPin.selector,
+          x: pendingPin.x,
+          y: pendingPin.y,
+          screenshotUrl: screenshot,
+        },
+        currentUser.id,
+      );
 
-    setPendingPin(null);
-    setScreenshotPreview("");
-    setMarkerActive(false);
-    setIsSubmitting(false);
-    loadData();
-    navigate(`/feedback/${item.id}`);
+      setPendingPin(null);
+      setScreenshotPreview("");
+      setScreenshotError(null);
+      setMarkerActive(false);
+      loadData();
+      navigate(`/feedback/${item.id}`);
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError ? error.message : "Feature opslaan mislukt",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetAnnotateState = () => {
     setPendingPin(null);
     setScreenshotPreview("");
+    setScreenshotError(null);
+    setSubmitError(null);
   };
 
   const selectFeedbackType = (type: FeedbackTypeMode) => {
@@ -343,38 +439,34 @@ export function ViewerPage() {
   const handleSubmitDeliver = async (deliveryDescription: string) => {
     if (!pendingPin || !deliverFeatureId || !currentUser) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    let screenshot = screenshotPreview;
-    if (!screenshot) screenshot = await captureScreenshot();
-
-    const updated = await deliverFeature(deliverFeatureId, {
-      pageUrl,
-      cssSelector: pendingPin.selector,
-      x: pendingPin.x,
-      y: pendingPin.y,
-      screenshotUrl: screenshot,
-      deliveryDescription,
-      deviceType: getDeviceTypeFromOrientation(),
-    });
-
-    const projectMembers = await getProject(projectId!);
-    if (projectMembers) {
-      const notifyIds = new Set<string>();
-      if (updated.createdBy) notifyIds.add(updated.createdBy);
-      for (const id of notifyIds) {
-        if (id !== currentUser.id) {
-          await addNotification(
-            id,
-            "status_change",
-            updated.id,
-            "Feature is opgeleverd — beoordeling vereist",
-          );
-        }
+    try {
+      let screenshot = screenshotPreview;
+      if (!screenshot) screenshot = await captureScreenshot();
+      if (!screenshot) {
+        setSubmitError("Screenshot is verplicht. Los het screenshot-probleem eerst op.");
+        return;
       }
-    }
 
-    setIsSubmitting(false);
-    navigate(`/feedback/${updated.id}`);
+      const updated = await deliverFeature(deliverFeatureId, {
+        pageUrl,
+        cssSelector: pendingPin.selector,
+        x: pendingPin.x,
+        y: pendingPin.y,
+        screenshotUrl: screenshot,
+        deliveryDescription,
+        deviceType: getDeviceTypeFromOrientation(),
+      });
+
+      navigate(`/feedback/${updated.id}`);
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError ? error.message : "Opleveren mislukt",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const pageBugs = feedbackItems.filter((f) => f.type === "bug");
@@ -508,9 +600,11 @@ export function ViewerPage() {
 
             {markerActive && (
               <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                {feedbackType === "bug"
-                  ? "Tik op de pagina om een bug te melden"
-                  : "Tik op de pagina om een feature toe te voegen"}
+                {isCapturingScreenshot
+                  ? "Screenshot wordt gemaakt..."
+                  : feedbackType === "bug"
+                    ? "Tik op de pagina om een bug te melden"
+                    : "Tik op de pagina om een feature toe te voegen"}
               </p>
             )}
           </>
@@ -557,7 +651,7 @@ export function ViewerPage() {
               <MockWebsite pageUrl={pageUrl} onNavigate={navigateToUrl} />
             ) : (
               <iframe
-                src={pageUrl}
+                src={getProxyViewerSrc(pageUrl, projectId)}
                 title="Website viewer"
                 className="h-full min-h-[inherit] w-full border-0"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -604,6 +698,15 @@ export function ViewerPage() {
           {pendingPin && !isDeliverMode && feedbackType === "bug" && (
             <BugReportForm
               screenshotPreview={screenshotPreview}
+              screenshotError={screenshotError}
+              isCapturingScreenshot={isCapturingScreenshot}
+              submitError={submitError}
+              showStagingAuth={!project.hasProxyAuth && !isMockPath(pageUrl)}
+              stagingAuth={stagingAuth}
+              onStagingAuthChange={setStagingAuth}
+              onSaveStagingAuth={saveStagingAuthAndRetry}
+              onRetryScreenshot={retryScreenshot}
+              isSavingStagingAuth={isSavingStagingAuth}
               deviceLabel={DEVICE_TYPE_LABELS[getDeviceTypeFromOrientation()]}
               onSubmit={handleSubmitBug}
               onCancel={() => {

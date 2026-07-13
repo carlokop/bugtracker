@@ -29,10 +29,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unreadCount = useNotificationStore((s) =>
     currentUser ? s.getUnreadCount(currentUser.id) : 0,
   );
+  const fetchNotifications = useNotificationStore((s) => s.fetchNotifications);
   const location = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
   const [projectName, setProjectName] = useState<string | null>(null);
   const [projectCount, setProjectCount] = useState(0);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    fetchNotifications(currentUser.id);
+    const interval = window.setInterval(() => {
+      fetchNotifications(currentUser.id);
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, [currentUser, fetchNotifications]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -72,7 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ? [
               {
                 to: `/projects/${selectedProjectId}/users`,
-                label: "Gebruikers",
+                label: "Klanten",
                 icon: Users,
               },
             ]

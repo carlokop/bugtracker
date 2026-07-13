@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { KeyRound, Pencil, Trash2, UserPlus } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { KeyRound, Lock, Mail, Pencil, Trash2, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,37 +25,54 @@ import type { Project, User } from "@/types";
 
 export function ProjectUsersPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showWelcome = searchParams.get("welcome") === "1";
   const { currentUser } = useAuthStore();
   const {
     getProject,
     getProjectMembers,
+    updateProject,
     createClientUser,
     updateClientUser,
     removeClient,
+    sendClientPasswordReset,
   } = useProjectStore();
 
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState({
     email: "",
-    password: "",
     name: "",
   });
 
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({
     email: "",
-    password: "",
     name: "",
   });
+
+  const [proxyAuth, setProxyAuth] = useState({
+    user: "",
+    password: "",
+  });
+  const [proxySaving, setProxySaving] = useState(false);
+  const [proxyMessage, setProxyMessage] = useState<string | null>(null);
 
   const load = async () => {
     if (!projectId) return;
     const p = await getProject(projectId);
     setProject(p ?? null);
+    if (p) {
+      setProxyAuth({
+        user: p.proxyAuthUser ?? "",
+        password: "",
+      });
+    }
     const m = await getProjectMembers(projectId);
     setMembers(m);
   };
@@ -73,16 +90,19 @@ export function ProjectUsersPage() {
   }
 
   const handleCreate = async () => {
-    if (!projectId || !createForm.email || !createForm.password) return;
+    if (!projectId || !createForm.email) return;
     setSaving(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       await createClientUser(projectId, {
         email: createForm.email,
-        password: createForm.password,
         name: createForm.name || undefined,
       });
-      setCreateForm({ email: "", password: "", name: "" });
+      setCreateForm({ email: "", name: "" });
+      setSuccessMessage(
+        "Account aangemaakt. De klant ontvangt een e-mail om een wachtwoord in te stellen.",
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Er ging iets mis");
@@ -95,7 +115,6 @@ export function ProjectUsersPage() {
     setEditUser(user);
     setEditForm({
       email: user.email,
-      password: "",
       name: user.name,
     });
     setError(null);
@@ -106,10 +125,9 @@ export function ProjectUsersPage() {
     setSaving(true);
     setError(null);
     try {
-      await updateClientUser(editUser.id, {
+      await updateClientUser(projectId!, editUser.id, {
         email: editForm.email,
         name: editForm.name,
-        ...(editForm.password ? { password: editForm.password } : {}),
       });
       setEditUser(null);
       await load();
@@ -120,10 +138,65 @@ export function ProjectUsersPage() {
     }
   };
 
+  const handleSendPasswordReset = async (userId: string) => {
+    if (!projectId) return;
+    setResettingUserId(userId);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const message = await sendClientPasswordReset(projectId, userId);
+      setSuccessMessage(message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Versturen mislukt");
+    } finally {
+      setResettingUserId(null);
+    }
+  };
+
   const handleRemove = async (userId: string) => {
     if (!projectId) return;
     await removeClient(projectId, userId);
     load();
+  };
+
+  const handleSaveProxyAuth = async () => {
+    if (!projectId) return;
+    setProxySaving(true);
+    setProxyMessage(null);
+    try {
+      await updateProject(projectId, {
+        proxyAuthUser: proxyAuth.user.trim() || null,
+        ...(proxyAuth.password
+          ? { proxyAuthPassword: proxyAuth.password }
+          : {}),
+      });
+      setProxyAuth((prev) => ({ ...prev, password: "" }));
+      setProxyMessage("Staging-toegang opgeslagen");
+      await load();
+    } catch (e) {
+      setProxyMessage(e instanceof Error ? e.message : "Opslaan mislukt");
+    } finally {
+      setProxySaving(false);
+    }
+  };
+
+  const handleClearProxyAuth = async () => {
+    if (!projectId) return;
+    setProxySaving(true);
+    setProxyMessage(null);
+    try {
+      await updateProject(projectId, {
+        proxyAuthUser: null,
+        proxyAuthPassword: null,
+      });
+      setProxyAuth({ user: "", password: "" });
+      setProxyMessage("Staging-toegang verwijderd");
+      await load();
+    } catch (e) {
+      setProxyMessage(e instanceof Error ? e.message : "Verwijderen mislukt");
+    } finally {
+      setProxySaving(false);
+    }
   };
 
   if (!project) {
@@ -134,12 +207,99 @@ export function ProjectUsersPage() {
     <div className="space-y-8">
       <PageHeader
         title="Gebruikers"
-        description={`Klantaccounts voor ${project.name}`}
+        description={`Klantaccounts voor ${project.name} — zij zien alleen feedback van dit project`}
       >
         <Link to={`/projects/${project.id}/viewer`}>
           <Button variant="outline">Terug naar viewer</Button>
         </Link>
       </PageHeader>
+
+      {showWelcome && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Project aangemaakt. Voeg nu een of meer klantaccounts toe — zij
+              kunnen daarna inloggen en feedback geven binnen dit project.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSearchParams({})}
+            >
+              Sluiten
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Staging-toegang (HTTP Basic Auth)
+          </CardTitle>
+          <CardDescription>
+            Voor wachtwoord-beveiligde staging-omgevingen zoals{" "}
+            <code className="text-xs">staging.*</code>. De proxy gebruikt deze
+            gegevens om de site in de viewer te laden.
+            {project.hasProxyAuth && (
+              <span className="mt-1 block text-primary">
+                Er zijn inloggegevens opgeslagen voor dit project.
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {proxyMessage && (
+            <p className="text-sm text-muted-foreground">{proxyMessage}</p>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="proxy-user">Gebruikersnaam</Label>
+              <Input
+                id="proxy-user"
+                value={proxyAuth.user}
+                onChange={(e) =>
+                  setProxyAuth({ ...proxyAuth, user: e.target.value })
+                }
+                placeholder="staging gebruiker"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="proxy-password">Wachtwoord</Label>
+              <Input
+                id="proxy-password"
+                type="password"
+                value={proxyAuth.password}
+                onChange={(e) =>
+                  setProxyAuth({ ...proxyAuth, password: e.target.value })
+                }
+                placeholder={
+                  project.hasProxyAuth
+                    ? "Laat leeg om huidige te behouden"
+                    : "Staging wachtwoord"
+                }
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleSaveProxyAuth} disabled={proxySaving}>
+              Opslaan
+            </Button>
+            {project.hasProxyAuth && (
+              <Button
+                variant="outline"
+                onClick={handleClearProxyAuth}
+                disabled={proxySaving}
+              >
+                Verwijderen
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -148,11 +308,14 @@ export function ProjectUsersPage() {
             Klantaccount aanmaken
           </CardTitle>
           <CardDescription>
-            Maak een account aan met e-mail en wachtwoord. De klant krijgt
-            toegang tot dit project.
+            Voeg een klant toe op e-mailadres. De klant ontvangt een mail om
+            zelf een wachtwoord in te stellen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {successMessage && !editUser && (
+            <p className="text-sm text-primary">{successMessage}</p>
+          )}
           {error && !editUser && (
             <p className="text-sm text-destructive">{error}</p>
           )}
@@ -180,26 +343,12 @@ export function ProjectUsersPage() {
                 placeholder="Jan de Vries"
               />
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="create-password">Wachtwoord</Label>
-              <Input
-                id="create-password"
-                type="password"
-                value={createForm.password}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, password: e.target.value })
-                }
-                placeholder="Minimaal 6 tekens"
-              />
-            </div>
           </div>
           <Button
             onClick={handleCreate}
-            disabled={
-              saving || !createForm.email || createForm.password.length < 6
-            }
+            disabled={saving || !createForm.email}
           >
-            Account aanmaken
+            Account aanmaken en uitnodiging versturen
           </Button>
         </CardContent>
       </Card>
@@ -230,9 +379,24 @@ export function ProjectUsersPage() {
                     <p className="text-sm font-medium">{member.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {member.email}
+                      {!member.passwordSet && (
+                        <span className="ml-2 text-amber-600">
+                          · wachtwoord nog niet ingesteld
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleSendPasswordReset(member.id)}
+                      disabled={resettingUserId === member.id}
+                      aria-label="Wachtwoord-reset versturen"
+                      title="Wachtwoord-reset versturen"
+                    >
+                      <Mail className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -262,8 +426,8 @@ export function ProjectUsersPage() {
           <DialogHeader>
             <DialogTitle>Klantaccount bewerken</DialogTitle>
             <DialogDescription>
-              Wijzig e-mail, naam of wachtwoord. Laat wachtwoord leeg om het
-              huidige wachtwoord te behouden.
+              Wijzig e-mail of naam. Voor een nieuw wachtwoord stuur je een
+              resetlink via het mail-icoon in de lijst.
             </DialogDescription>
           </DialogHeader>
           {error && editUser && (
@@ -291,26 +455,10 @@ export function ProjectUsersPage() {
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-password">Nieuw wachtwoord</Label>
-              <Input
-                id="edit-password"
-                type="password"
-                value={editForm.password}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, password: e.target.value })
-                }
-                placeholder="Laat leeg om niet te wijzigen"
-              />
-            </div>
             <Button
               className="w-full"
               onClick={handleUpdate}
-              disabled={
-                saving ||
-                !editForm.email ||
-                (editForm.password.length > 0 && editForm.password.length < 6)
-              }
+              disabled={saving || !editForm.email}
             >
               Opslaan
             </Button>

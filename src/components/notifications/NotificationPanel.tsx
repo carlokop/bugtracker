@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,32 +6,32 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
-import type { Notification } from "@/types";
 
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
   const { currentUser } = useAuthStore();
-  const { fetchNotifications, markAsRead, markAllAsRead } =
+  const { notifications, fetchNotifications, markAsRead, markAllAsRead } =
     useNotificationStore();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     if (currentUser) {
-      fetchNotifications(currentUser.id).then(setNotifications);
+      fetchNotifications(currentUser.id);
     }
   }, [currentUser, fetchNotifications]);
 
   if (!currentUser) return null;
 
+  const userNotifications = notifications.filter(
+    (notification) => notification.userId === currentUser.id,
+  );
+
   const handleMarkAll = async () => {
     await markAllAsRead(currentUser.id);
-    const updated = await fetchNotifications(currentUser.id);
-    setNotifications(updated);
+    await fetchNotifications(currentUser.id);
   };
 
   const handleMarkOne = async (id: string) => {
     await markAsRead(id);
-    const updated = await fetchNotifications(currentUser.id);
-    setNotifications(updated);
+    await fetchNotifications(currentUser.id);
   };
 
   return (
@@ -48,12 +48,12 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <div className="max-h-80 overflow-y-auto">
-        {notifications.length === 0 ? (
+        {userNotifications.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             Geen notificaties
           </p>
         ) : (
-          notifications.map((notif) => (
+          userNotifications.map((notif) => (
             <div
               key={notif.id}
               className={cn(

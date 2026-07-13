@@ -2,9 +2,13 @@
 
 ## 1. Samenvatting
 
-Bugtracker is een webapplicatie waarmee webdevelopers structureel feedback kunnen verzamelen op websites die zij bouwen. Een admin (developer/agency) maakt projecten aan en nodigt klanten uit. Klanten krijgen toegang tot een viewer waarin de website van het project wordt getoond met een transparante overlay. Klanten klikken op een specifiek element/gebied op de pagina en geven daar contextuele feedback op. De developer beheert deze feedback-items (status, reacties), en beide partijen worden via notificaties en e-mail op de hoogte gehouden van updates.
+Bugtracker is een webapplicatie waarmee webdevelopers structureel feedback kunnen verzamelen op websites die zij bouwen. Een admin (developer/agency) maakt projecten aan en geeft klanten toegang. Klanten krijgen toegang tot een viewer waarin de website van het project wordt getoond met een transparante overlay. Klanten klikken op een specifiek element/gebied op de pagina en melden daar een bug. De developer kan in dezelfde viewer features aanmaken en opleveren. De developer beheert deze feedback-items (status, reacties), en beide partijen worden via notificaties en (in de doelarchitectuur) e-mail op de hoogte gehouden van updates.
 
 Vergelijkbare bestaande producten ter referentie: Marker.io, BugHerd, Markup.io, PageProofer.
+
+### 1.1 Status van de implementatie
+
+De huidige codebase is een **frontend-only prototype** (React + TypeScript, Zustand als mock-datastore, geen backend/database/e-mail). Secties 6 (techstack) en delen van 4.4 (e-mail) beschrijven de **doelarchitectuur** en zijn nog niet gebouwd. De overige secties van dit document zijn bijgewerkt om de daadwerkelijke UX/gedrag van het prototype te volgen; waar het prototype (bewust of nog niet) afwijkt van het oorspronkelijke ontwerp staat dit expliciet vermeld, samen met een verwijzing naar [PLAN.md](./PLAN.md) waar relevant.
 
 ## 2. Doelen & Succescriteria
 
@@ -21,24 +25,27 @@ Succes = een developer kan binnen 5 minuten een project + klant aanmaken, en een
 - **Klant (client)**: toegang tot exact de projecten waarvoor hij/zij is uitgenodigd (kan er meerdere zijn). Ziet alleen data van "zijn" project(en). Kan feedback plaatsen, reageren op bestaande feedback, en (optioneel) status "geverifieerd/akkoord" zetten nadat de developer iets als "klaar" heeft gemarkeerd.
 - (Toekomst, niet in MVP) **Teamlid/developer-rol** naast admin, voor agencies met meerdere developers per project.
 
-Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met een invite-link (magic link) om hun account te activeren. Wachtwoord-reset via e-mail.
+Authenticatie: e-mail + wachtwoord, rol-gebaseerd (admin/klant).
+
+**Huidige implementatie (prototype):** de admin maakt een klantaccount direct aan (e-mailadres + zelf gekozen wachtwoord) op de projectgebruikerspagina; er is nog geen invite-link/magic-link-e-mail en geen zelfservice wachtwoord-reset. Klant en admin kunnen daarna simpelweg inloggen met e-mail + wachtwoord. Invite-via-e-mail en wachtwoord-reset via e-mail blijven het doel voor de productieversie (zie sectie 6, e-mailprovider) en zijn afhankelijk van een backend.
 
 ## 4. Kernfunctionaliteit
 
 ### 4.1 Projectbeheer (admin)
 - Project aanmaken met naam, doel-URL, omschrijving.
-- Klanten toevoegen/verwijderen aan een project via e-mailadres (invite-flow).
-- Eén klant kan aan meerdere projecten gekoppeld zijn.
-- Projectoverzicht met status/voortgang: aantal open/klaar/geverifieerd feedback-items.
+- Klanten toevoegen aan een project: admin maakt een klantaccount aan (e-mailadres + wachtwoord) op de projectgebruikerspagina — géén invite-e-mail in de huidige implementatie (zie 3, Authenticatie). Admin kan klantaccounts ook bewerken (e-mail/naam/wachtwoord) of verwijderen.
+- Eén klant kan aan meerdere projecten gekoppeld zijn; bij meerdere projecten kiest de gebruiker na inloggen op een projectkeuzescherm welk project hij opent (bij precies één project wordt automatisch doorgeschakeld).
+- Projectoverzicht (dashboard) met status/voortgang per project: aantal open/in behandeling/ter goedkeuring/gedaan bugs en aangevraagd/in ontwikkeling/opgeleverd/geaccepteerd features.
 
 ### 4.2 Website-viewer met overlay-annotatie
 - Viewer toont de doelwebsite van het project in een frame, met een transparante overlay-laag erboven.
-- **Bug melden (primair gebruik viewer):** gebruiker klikt op een element → pin/marker → formulier → automatisch screenshot. Pin, coördinaten, CSS-selector, pagina-URL en screenshot zijn **verplicht** voor bugs.
-- **Idee voorstellen (feature):** kan via een apart formulier op het feedbackbord of in de viewer, **zonder** verplichte pin. Optioneel kan de klant een locatie op de site aangeven (pin + screenshot).
-- Elke bug-pin registreert: klik-coördinaten, CSS-selector, pagina-URL en screenshot.
+- **Bug melden (primair gebruik viewer, alle rollen):** gebruiker klikt op een element → pin/marker → automatisch screenshot → formulier ("Wat gaat er mis?" / "Hoe hoort het te werken?"). Pin, coördinaten, CSS-selector, pagina-URL en screenshot zijn **verplicht** voor bugs.
+- **Feature aanmaken — huidige implementatie (admin-only):** in de viewer is de knop "Feature" alleen zichtbaar voor de admin. De admin plaatst een pin, vult "Wat wordt er gebouwd?" en "Acceptatiecriteria" in; het item krijgt direct status **Goedgekeurd** (de status "Aangevraagd" bestaat in het datamodel maar is in de huidige UI niet bereikbaar — er is geen manier voor een klant om zelf een feature aan te vragen). Dit is een bewuste vereenvoudiging van het prototype: features functioneren nu als een roadmap/aankondiging vanuit de developer, niet als een klantverzoek. Of klant-initiated feature-aanvragen (zoals oorspronkelijk bedoeld) alsnog wenselijk zijn, is een openstaande productbeslissing (zie sectie 8).
+- Bij feature-oplevering plaatst de admin via een apart flow ("Locatie aangeven en opleveren") een pin + screenshot en een toelichting wat er gebouwd is; dit is dus altijd gekoppeld aan een locatie op de pagina, ook al is de pin bij het aanmaken van de feature optioneel.
+- Elke bug-pin (en elke feature-pin, indien geplaatst) registreert: klik-coördinaten, CSS-selector, pagina-URL en screenshot.
 - Bestaande pins worden getoond als klikbare markers op de pagina zodat je de discussie per punt kan volgen.
 - Klanten kunnen feedback geven op elk apparaattype: desktop, tablet en mobiel. De viewer/overlay moet op al deze apparaten bruikbaar zijn.
-- Bij het aanmaken van een feedback-item geeft de klant (of admin) aan op welk apparaattype de feedback van toepassing is (**Desktop / Tablet / Mobiel**). Dit apparaattype wordt bij het feedback-item opgeslagen en getoond/filterbaar in het overzicht, zodat de developer weet in welke context (viewport/apparaat) het probleem zich voordoet — dit kan namelijk afwijken van het apparaat waarop de feedback daadwerkelijk is geplaatst (bv. een klant bekijkt een screenshot van mobiel maar geeft feedback vanaf desktop).
+- **Apparaattype — huidige implementatie:** wordt automatisch afgeleid uit viewportbreedte en schermoriëntatie op het moment van indienen, en getoond als label in het formulier (niet handmatig aan te passen door de gebruiker). Het apparaattype wordt bij het feedback-item opgeslagen en getoond/filterbaar in het overzicht. Een handmatige override (zoals oorspronkelijk bedoeld, voor het geval een klant bijvoorbeeld een mobiel-screenshot bekijkt maar feedback geeft vanaf desktop) is niet geïmplementeerd.
 
 **Technische uitdaging — website embedden:** de meeste sites blokkeren embedding via `X-Frame-Options`/CSP. Aanbevolen aanpak voor de PRD:
 - **MVP-aanpak (recommended):** een server-side proxy. De applicatie haalt de doel-URL server-side op, herschrijft relatieve links/assets naar de proxy, verwijdert/negeert blokkerende response-headers (`X-Frame-Options`, `frame-ancestors` in CSP), en injecteert een overlay-script in de HTML voordat deze aan de klant wordt getoond. Dit werkt zonder dat de klant iets aan hun eigen site moet aanpassen, en is de meest gebruiksvriendelijke optie voor een developer die feedback wil van een niet-technische klant.
@@ -46,19 +53,22 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 - Beide opties worden als open technisch risico benoemd in sectie 8; aanbevolen om dit met een technische spike te valideren voordat build start.
 
 ### 4.3 Feedback-beheer
-- Lijst/overzicht per project met tabs **Bugs | Features | Alles**, filterbaar op status en pagina/URL.
+- Lijst/overzicht per project (kanbanbord, drag & drop voor admin) met tabs **Bugs | Features | Alles**, filterbaar op status en pagina/URL.
 - Twee typen feedback met aparte workflows:
   - **Bugs:** Open → In behandeling → Ter goedkeuring → Gedaan
-  - **Features:** Aangevraagd → Goedgekeurd → In ontwikkeling → Opgeleverd → Geaccepteerd
-- Bugs kunnen gekoppeld worden aan een bestaande feature (`linked_feature_id`). "Feature slecht gebouwd" = nieuwe bug gekoppeld aan feature, geen type-wissel.
-- Threaded reacties per feedback-item: klant en developer kunnen over-en-weer reageren op één item.
-- Bij bugs: klant keurt goed of wijst af na oplevering. Bij features: admin keurt aanvraag goed; klant accepteert na oplevering.
+  - **Features:** Aangevraagd → Goedgekeurd → In ontwikkeling → Opgeleverd → Geaccepteerd (zie 4.2 voor de huidige, admin-only manier waarop features worden aangemaakt)
+- Bij bugs: developer neemt in behandeling → zet ter goedkeuring; klant keurt goed (**Gedaan**) of af (terug naar **In behandeling**). Bij features: admin start ontwikkeling → levert op met pin + toelichting; klant accepteert (**Geaccepteerd**) of wijst af (terug naar **In ontwikkeling**). Goedkeuring/acceptatie kan achteraf ongedaan gemaakt worden.
+- Admin kan de status van elk item ook handmatig wijzigen via een dropdown, los van de knoppen-flow.
+- Afgeronde items (bug: Gedaan, feature: Geaccepteerd) kunnen door de admin verwijderd worden (met bevestiging).
+- Chronologische reacties per feedback-item: klant en developer kunnen om en om reageren op één item. **Let op:** dit is momenteel een platte lijst (geen echte "threads" met reply-op-reactie, en geen @mentions — dat blijft toekomstig werk).
+- **Bug ↔ feature-koppeling (`linkedFeatureId`) — deels geïmplementeerd:** het datamodel en de store ondersteunen een koppeling van een bug aan een feature (`createBug` accepteert `linkedFeatureId`, `getBugsForFeature` haalt gekoppelde bugs op), maar er is nog **geen UI** om deze koppeling te maken of te tonen (geen "Bug melden bij deze feature"-knop, geen sectie met gerelateerde bugs op de feature-detailpagina). Zie [PLAN.md](./PLAN.md) fase 2.
+- **"Omzetten naar bug" (`convertFeatureToBug`) — wél geïmplementeerd, in tegenspraak met de oorspronkelijke intentie:** een klant kan een opgeleverde feature (status Opgeleverd) via de viewer omzetten naar een bug-item. Dit **overschrijft het bestaande feature-item** (type en status wijzigen, feature-data gaat verloren) in plaats van er een nieuwe, gekoppelde bug bij aan te maken. Dit is dus het tegenovergestelde van de "geen type-wissel"-aanpak die in sectie 10 als uitgangspunt staat. Dit moet nog opgelost worden: [PLAN.md](./PLAN.md) beschrijft het voornemen om `convertFeatureToBug` te verwijderen ten gunste van de koppeling hierboven — dat is nog niet uitgevoerd.
 - Toewijzen van feedback aan een specifieke developer (bij meerdere teamleden, toekomst).
 
 ### 4.4 Notificaties & e-mail
-- In-app notificatiecentrum: nieuwe feedback, nieuwe reactie, status-wijziging, @mentions.
-- E-mailnotificaties bij dezelfde events, met instelbare voorkeuren (direct / dagelijkse samenvatting / uit) per gebruiker.
-- Transactionele e-mails: uitnodiging klant, wachtwoord-reset, verificatie.
+- In-app notificaties: nieuwe bug/feature, nieuwe reactie, status-wijziging. **Huidige implementatie:** dit zijn mock in-app notificaties in de store; er is nog geen zichtbaar notificatiecentrum-overzicht met leesstatus-beheer, geen @mentions en geen e-mailverzending.
+- E-mailnotificaties bij dezelfde events, met instelbare voorkeuren (direct / dagelijkse samenvatting / uit) per gebruiker — **niet geïmplementeerd**, vereist backend + e-mailprovider.
+- Transactionele e-mails: uitnodiging klant, wachtwoord-reset, verificatie — **niet geïmplementeerd** (zie 3, Authenticatie).
 - E-mail verzending via een provider (bv. Postmark/SendGrid/Resend) — geen eigen mailserver.
 
 ### 4.5 Dashboard
@@ -110,5 +120,6 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 - Ondersteuning voor native mobile apps (alleen websites).
 - Automatische visuele regressie-detectie (screenshot-diffing tussen versies).
 - Facturatie/abonnementen (multi-tenant SaaS-billing).
-- Type-wissel tussen bug en feature (geen `convertFeatureToBug`).
 - Feature-prioriteit en `rejected`-status met reden.
+- Klant-initiated feature-aanvragen (in de huidige implementatie maakt alleen de admin features aan, zie 4.2) — expliciete productbeslissing nodig of dit terugkomt.
+- **Nog niet out of scope, maar wel inconsistent met het product:** `convertFeatureToBug` bestaat nog in de code (zie 4.3) terwijl het uitgangspunt is dat er géén type-wissel tussen bug en feature is. Dit moet volgens [PLAN.md](./PLAN.md) verwijderd worden ten gunste van een bug↔feature-koppeling; tot die opruiming is uitgevoerd is "geen type-wissel" dus nog geen feit in de huidige codebase.

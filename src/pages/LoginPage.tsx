@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,7 +67,15 @@ export function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Wachtwoord</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Wachtwoord</Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Wachtwoord vergeten?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -93,9 +101,7 @@ export function LoginPage() {
               </Button>
             </form>
             <p className="mt-5 rounded-xl bg-muted/60 px-3 py-2.5 text-center text-xs leading-relaxed text-muted-foreground">
-              Demo: dev@agency.nl / admin123
-              <br />
-              of klant@bakkerij.nl / klant123
+              Admin: info@websitediewerkt.nl
             </p>
           </CardContent>
         </Card>

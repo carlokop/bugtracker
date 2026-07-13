@@ -1,0 +1,40 @@
+{
+  "name": "bugtracker-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsx scripts/generate-prisma.ts && tsc",
+    "start": "node dist/index.js",
+    "postinstall": "tsx scripts/generate-prisma.ts",
+    "db:generate": "tsx scripts/generate-prisma.ts",
+    "db:migrate": "tsx scripts/with-prisma.ts migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "tsx scripts/with-prisma.ts migrate deploy --schema prisma/postgresql/schema.prisma",
+    "db:seed": "tsx scripts/with-prisma.ts db seed",
+    "db:studio": "tsx scripts/with-prisma.ts studio --schema prisma/schema.prisma"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.11.1",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "puppeteer": "^24.43.1",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.12",
+    "prisma": "^6.11.1",
+    "tsx": "^4.20.3",
+    "typescript": "~5.8.3"
+  }
+}

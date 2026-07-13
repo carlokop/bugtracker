@@ -15,3 +15,15 @@ export function normalizeViewerUrl(input: string, fallback?: string): string {
 
   return `https://${trimmed}`;
 }
+
+/** Laadt externe sites same-origin via de backend-proxy (voor iframe + screenshots). */
+export function getProxyViewerSrc(pageUrl: string, projectId?: string): string {
+  const normalized = normalizeViewerUrl(pageUrl);
+  const params = new URLSearchParams({ url: normalized });
+  if (projectId) params.set("projectId", projectId);
+  return `/api/proxy?${params.toString()}`;
+}
+
+export function shouldUseProxy(pageUrl: string): boolean {
+  return !isMockPath(pageUrl);
+}

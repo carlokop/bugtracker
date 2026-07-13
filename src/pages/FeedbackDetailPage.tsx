@@ -11,12 +11,8 @@ import { FeedbackItemActions } from "@/components/feedback/FeedbackItemActions";
 import { CommentThread } from "@/components/feedback/CommentThread";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFeedbackStore } from "@/store/useFeedbackStore";
-import { useNotificationStore } from "@/store/useNotificationStore";
-import { useProjectStore } from "@/store/useProjectStore";
-import { MOCK_USERS } from "@/mock/seed";
 import { formatDate } from "@/lib/utils";
 import type { FeedbackComment, FeedbackItem, ItemStatus } from "@/types";
-import { getStatusLabel } from "@/types";
 
 export function FeedbackDetailPage() {
   const { feedbackId } = useParams<{ feedbackId: string }>();
@@ -28,8 +24,6 @@ export function FeedbackDetailPage() {
     addComment,
     getComments,
   } = useFeedbackStore();
-  const { addNotification } = useNotificationStore();
-  const { getProject } = useProjectStore();
 
   const [item, setItem] = useState<FeedbackItem | null>(null);
   const [comments, setComments] = useState<FeedbackComment[]>([]);
@@ -47,30 +41,11 @@ export function FeedbackDetailPage() {
     load();
   }, [feedbackId]);
 
-  const notifyCreator = async (
-    message: string,
-    targetItem: FeedbackItem = item!,
-  ) => {
-    if (!currentUser || !targetItem) return;
-    const creator = MOCK_USERS.find((u) => u.id === targetItem.createdBy);
-    if (creator && creator.id !== currentUser.id) {
-      await addNotification(
-        creator.id,
-        "status_change",
-        targetItem.id,
-        message,
-      );
-    }
-  };
-
   const handleStatusChange = async (status: ItemStatus) => {
     if (!item || !currentUser || currentUser.role !== "admin") return;
     if (item.status === status) return;
     const updated = await updateStatus(item.id, status);
     setItem(updated);
-    await notifyCreator(
-      `Status gewijzigd naar "${getStatusLabel(status, item.type)}"`,
-    );
   };
 
   const handleBugApproval = async (approved: boolean) => {
@@ -79,16 +54,6 @@ export function FeedbackDetailPage() {
     const status: ItemStatus = approved ? "done" : "in_progress";
     const updated = await updateStatus(item.id, status);
     setItem(updated);
-
-    const project = await getProject(item.projectId);
-    if (!project || !currentUser) return;
-
-    await addNotification(
-      project.adminId,
-      "status_change",
-      item.id,
-      approved ? "Klant heeft bug goedgekeurd" : "Klant heeft bug afgekeurd",
-    );
   };
 
   const handleBugUndoApproval = async () => {
@@ -102,19 +67,6 @@ export function FeedbackDetailPage() {
     }
     const updated = await updateStatus(item.id, "in_review");
     setItem(updated);
-
-    const project = await getProject(item.projectId);
-    if (!project || !currentUser) return;
-    const notifyUserId =
-      currentUser.role === "client" ? project.adminId : item.createdBy;
-    if (notifyUserId !== currentUser.id) {
-      await addNotification(
-        notifyUserId,
-        "status_change",
-        item.id,
-        "Goedkeuring is ongedaan gemaakt",
-      );
-    }
   };
 
   const handleAdminStartWork = async () => {
@@ -122,14 +74,6 @@ export function FeedbackDetailPage() {
     if (item.status !== "open") return;
     const updated = await updateStatus(item.id, "in_progress");
     setItem(updated);
-    if (item.createdBy !== currentUser.id) {
-      await addNotification(
-        item.createdBy,
-        "status_change",
-        item.id,
-        "Developer werkt aan je bug",
-      );
-    }
   };
 
   const handleAdminReadyForReview = async () => {
@@ -137,28 +81,18 @@ export function FeedbackDetailPage() {
     if (item.status !== "in_progress") return;
     const updated = await updateStatus(item.id, "in_review");
     setItem(updated);
-    if (item.createdBy !== currentUser.id) {
-      await addNotification(
-        item.createdBy,
-        "status_change",
-        item.id,
-        "Bug klaar voor review — controleer of het is opgelost",
-      );
-    }
   };
 
   const handleFeatureApprove = async () => {
     if (!item || item.type !== "feature") return;
     const updated = await updateStatus(item.id, "approved");
     setItem(updated);
-    await notifyCreator("Je feature-aanvraag is goedgekeurd");
   };
 
   const handleFeatureStart = async () => {
     if (!item || item.type !== "feature") return;
     const updated = await updateStatus(item.id, "in_progress");
     setItem(updated);
-    await notifyCreator("Ontwikkeling van je feature is gestart");
   };
 
   const handleFeatureDeliver = () => {
@@ -174,20 +108,6 @@ export function FeedbackDetailPage() {
     const status: ItemStatus = accepted ? "accepted" : "in_progress";
     const updated = await updateStatus(item.id, status);
     setItem(updated);
-
-    const project = await getProject(item.projectId);
-    if (!project || !currentUser) return;
-
-    if (currentUser.role === "client") {
-      await addNotification(
-        project.adminId,
-        "status_change",
-        item.id,
-        accepted
-          ? "Klant heeft feature geaccepteerd"
-          : "Klant heeft feature afgewezen",
-      );
-    }
   };
 
   const handleFeatureUndoAccept = async () => {
@@ -201,15 +121,6 @@ export function FeedbackDetailPage() {
     await addComment(item.id, currentUser.id, newComment);
     setNewComment("");
     load();
-
-    if (item.createdBy !== currentUser.id) {
-      await addNotification(
-        item.createdBy,
-        "new_comment",
-        item.id,
-        "Nieuwe reactie op feedback",
-      );
-    }
   };
 
   if (!item) {
@@ -275,7 +186,7 @@ export function FeedbackDetailPage() {
 
         <p className="text-xs text-muted-foreground">
           Aangemaakt op {formatDate(item.createdAt)} door{" "}
-          {MOCK_USERS.find((u) => u.id === item.createdBy)?.name ?? "Onbekend"}
+          {item.createdByName ?? "Onbekend"}
         </p>
 
         {item.hasLocation && item.x != null && item.y != null && (

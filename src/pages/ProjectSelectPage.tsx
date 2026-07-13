@@ -35,6 +35,7 @@ export function ProjectSelectPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", targetUrl: "", description: "" });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -42,7 +43,7 @@ export function ProjectSelectPage() {
     getProjectsForUser(currentUser.id, currentUser.role).then((projs) => {
       setProjects(projs);
       setLoading(false);
-      if (projs.length === 1) {
+      if (projs.length === 1 && currentUser.role !== "admin") {
         selectProject(projs[0].id);
         navigate(`/projects/${projs[0].id}/viewer`, { replace: true });
       }
@@ -55,12 +56,27 @@ export function ProjectSelectPage() {
   };
 
   const handleCreate = async () => {
-    if (!currentUser || !form.name) return;
-    const project = await createProject(form, currentUser.id);
-    setForm({ name: "", targetUrl: "", description: "" });
-    setDialogOpen(false);
-    selectProject(project.id);
-    navigate(`/projects/${project.id}/viewer`);
+    if (!currentUser || !form.name.trim() || !form.targetUrl.trim()) {
+      setError("Vul projectnaam en doel-URL in.");
+      return;
+    }
+    setError(null);
+    try {
+      const project = await createProject(
+        {
+          name: form.name.trim(),
+          targetUrl: form.targetUrl.trim(),
+          description: form.description.trim(),
+        },
+        currentUser.id,
+      );
+      setForm({ name: "", targetUrl: "", description: "" });
+      setDialogOpen(false);
+      selectProject(project.id);
+      navigate(`/projects/${project.id}/users?welcome=1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Project aanmaken mislukt");
+    }
   };
 
   if (!currentUser) return null;
@@ -78,8 +94,12 @@ export function ProjectSelectPage() {
   return (
     <div className="space-y-6 sm:space-y-8">
       <PageHeader
-        title="Kies een project"
-        description="Selecteer het project waaraan je wilt werken"
+        title={isAdmin ? "Jouw projecten" : "Kies een project"}
+        description={
+          isAdmin
+            ? "Maak een project aan, voeg klanten toe en beheer feedback per project"
+            : "Selecteer het project waaraan je wilt werken"
+        }
       >
         {isAdmin && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -109,7 +129,7 @@ export function ProjectSelectPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="url">Doel-URL</Label>
+                  <Label htmlFor="url">Doel-URL *</Label>
                   <Input
                     id="url"
                     type="url"
@@ -132,7 +152,16 @@ export function ProjectSelectPage() {
                     placeholder="Korte omschrijving van het project..."
                   />
                 </div>
-                <Button className="w-full" onClick={handleCreate}>
+                {error && (
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+                <Button
+                  className="w-full"
+                  onClick={handleCreate}
+                  disabled={!form.name.trim() || !form.targetUrl.trim()}
+                >
                   Project aanmaken
                 </Button>
               </div>
@@ -140,6 +169,19 @@ export function ProjectSelectPage() {
           </Dialog>
         )}
       </PageHeader>
+
+      {isAdmin && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-4 text-sm leading-relaxed text-muted-foreground">
+            <p className="font-medium text-foreground">Developer-workflow</p>
+            <ol className="mt-2 list-inside list-decimal space-y-1">
+              <li>Maak een project aan (website van de klant)</li>
+              <li>Voeg klantaccounts toe onder Gebruikers</li>
+              <li>Verzamel en beheer feedback binnen dat project</li>
+            </ol>
+          </CardContent>
+        </Card>
+      )}
 
       {projects.length === 0 ? (
         <Card>

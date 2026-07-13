@@ -19,7 +19,7 @@ import type { Project, User } from "@/types";
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { currentUser } = useAuthStore();
-  const { getProject, getProjectMembers, inviteClient, removeClient } =
+  const { getProject, getProjectMembers, createClientUser, removeClient } =
     useProjectStore();
   const isAdmin = currentUser?.role === "admin";
   const [project, setProject] = useState<Project | null>(null);
@@ -42,7 +42,9 @@ export function ProjectDetailPage() {
   const handleInvite = async () => {
     if (!projectId || !inviteEmail) return;
     setInviting(true);
-    await inviteClient(projectId, inviteEmail);
+    await createClientUser(projectId, {
+      email: inviteEmail,
+    });
     setInviteEmail("");
     setInviting(false);
     load();
@@ -85,7 +87,8 @@ export function ProjectDetailPage() {
               Klanten uitnodigen
             </CardTitle>
             <CardDescription>
-              Voeg klanten toe via e-mailadres (mock invite — geen echte mail)
+              Voeg klanten toe via e-mailadres. Zij ontvangen een mail om een
+              wachtwoord in te stellen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

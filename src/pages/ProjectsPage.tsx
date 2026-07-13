@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ExternalLink, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +25,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useFeedbackStore } from "@/store/useFeedbackStore";
+import { useProjectContextStore } from "@/store/useProjectContextStore";
 import type { Project } from "@/types";
 
 export function ProjectsPage() {
+  const navigate = useNavigate();
   const { currentUser } = useAuthStore();
+  const { selectProject } = useProjectContextStore();
   const { getProjectsForUser, createProject } = useProjectStore();
   const { getCountsByProject } = useFeedbackStore();
   const [projects, setProjects] = useState<
@@ -36,6 +39,7 @@ export function ProjectsPage() {
   >([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", targetUrl: "", description: "" });
+  const [error, setError] = useState<string | null>(null);
 
   const loadProjects = async () => {
     if (!currentUser) return;
@@ -56,12 +60,36 @@ export function ProjectsPage() {
     loadProjects();
   }, [currentUser]);
 
+  if (currentUser?.role !== "admin") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Alleen developers hebben toegang tot projectbeheer.
+      </p>
+    );
+  }
+
   const handleCreate = async () => {
-    if (!currentUser || !form.name) return;
-    await createProject(form, currentUser.id);
-    setForm({ name: "", targetUrl: "", description: "" });
-    setDialogOpen(false);
-    loadProjects();
+    if (!currentUser || !form.name.trim() || !form.targetUrl.trim()) {
+      setError("Vul projectnaam en doel-URL in.");
+      return;
+    }
+    setError(null);
+    try {
+      const project = await createProject(
+        {
+          name: form.name.trim(),
+          targetUrl: form.targetUrl.trim(),
+          description: form.description.trim(),
+        },
+        currentUser.id,
+      );
+      setForm({ name: "", targetUrl: "", description: "" });
+      setDialogOpen(false);
+      selectProject(project.id);
+      navigate(`/projects/${project.id}/users?welcome=1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Project aanmaken mislukt");
+    }
   };
 
   return (
@@ -95,7 +123,7 @@ export function ProjectsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="url">Doel-URL</Label>
+                <Label htmlFor="url">Doel-URL *</Label>
                 <Input
                   id="url"
                   value={form.targetUrl}
@@ -116,7 +144,16 @@ export function ProjectsPage() {
                   placeholder="Korte omschrijving van het project..."
                 />
               </div>
-              <Button className="w-full" onClick={handleCreate}>
+              {error && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+              <Button
+                className="w-full"
+                onClick={handleCreate}
+                disabled={!form.name.trim() || !form.targetUrl.trim()}
+              >
                 Project aanmaken
               </Button>
             </div>
@@ -140,7 +177,12 @@ export function ProjectsPage() {
               </p>
               <div className="flex items-center justify-between border-t border-border/60 pt-4">
                 <Badge variant="open">{project.openCount} open</Badge>
-                <Link to={`/projects/${project.id}`}>
+                <Link to={`/projects/${project.id}/users`}>
+                  <Button variant="outline" size="sm">
+                    Gebruikers
+                  </Button>
+                </Link>
+                <Link to={`/projects/${project.id}/viewer`}>
                   <Button variant="outline" size="sm">
                     Openen
                   </Button>

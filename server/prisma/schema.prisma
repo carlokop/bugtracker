@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE
+}
+
+enum DeviceType {
+  DESKTOP
+  TABLET
+  MOBILE
+}
+
+enum NotificationType {
+  NEW_FEEDBACK
+  NEW_BUG
+  NEW_FEATURE
+  NEW_COMMENT
+  STATUS_CHANGE
+  MENTION
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String?
+  role         UserRole
+  createdAt    DateTime @default(now())
+
+  sessions             Session[]
+  adminProjects        Project[]            @relation("ProjectAdmin")
+  projectMembers       ProjectMember[]
+  feedbackItems        FeedbackItem[]       @relation("FeedbackCreator")
+  feedbackComments     FeedbackComment[]
+  notifications        Notification[]
+  passwordResetTokens  PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Project {
+  id               String   @id @default(cuid())
+  name             String
+  targetUrl        String
+  description      String   @default("")
+  adminId          String
+  proxyAuthUser    String?
+  proxyAuthPassword String?
+  createdAt        DateTime @default(now())
+
+  admin          User            @relation("ProjectAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  feedbackItems  FeedbackItem[]
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model FeedbackItem {
+  id                  String       @id @default(cuid())
+  projectId           String
+  type                FeedbackType
+  status              String
+  problemDescription  String
+  definitionOfDone    String
+  deviceType          DeviceType
+  hasLocation         Boolean      @default(false)
+  pageUrl             String?
+  cssSelector         String?
+  x                   Float?
+  y                   Float?
+  screenshotUrl       String?
+  deliveryDescription String?
+  linkedFeatureId     String?
+  createdBy           String
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator  User              @relation("FeedbackCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  comments FeedbackComment[]
+}
+
+model FeedbackComment {
+  id             String   @id @default(cuid())
+  feedbackItemId String
+  userId         String
+  text           String
+  createdAt      DateTime @default(now())
+
+  feedbackItem FeedbackItem @relation(fields: [feedbackItemId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  type        NotificationType
+  referenceId String
+  message     String
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

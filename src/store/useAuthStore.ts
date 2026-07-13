@@ -1,15 +1,16 @@
 import { create } from "zustand";
-import { MOCK_USERS } from "@/mock/seed";
-import { delay } from "@/lib/utils";
+import * as authApi from "@/api/auth";
+import { ApiError } from "@/api/client";
 import { useProjectContextStore } from "@/store/useProjectContextStore";
 import type { User } from "@/types";
 
 interface AuthState {
   currentUser: User | null;
   isLoading: boolean;
+  isInitialized: boolean;
   loginError: string | null;
+  initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
-  loginAsUser: (userId: string) => Promise<void>;
   logout: () => Promise<void>;
   getUsers: () => Promise<User[]>;
 }
@@ -17,49 +18,50 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   currentUser: null,
   isLoading: false,
+  isInitialized: false,
   loginError: null,
+
+  initialize: async () => {
+    set({ isLoading: true });
+    try {
+      const { user } = await authApi.getMe();
+      set({ currentUser: user, isLoading: false, isInitialized: true });
+    } catch {
+      set({ currentUser: null, isLoading: false, isInitialized: true });
+    }
+  },
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, loginError: null });
-    await delay();
-    const user = MOCK_USERS.find(
-      (u) =>
-        u.email.toLowerCase() === email.toLowerCase() && u.password === password,
-    );
-    if (!user) {
+    try {
+      const { user } = await authApi.login(email, password);
+      set({ currentUser: user, isLoading: false, loginError: null });
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Ongeldig e-mailadres of wachtwoord";
       set({
         isLoading: false,
-        loginError: "Ongeldig e-mailadres of wachtwoord",
+        loginError: message,
       });
       return false;
-    }
-    const { password: _, ...safeUser } = user;
-    set({ currentUser: safeUser, isLoading: false, loginError: null });
-    return true;
-  },
-
-  loginAsUser: async (userId: string) => {
-    set({ isLoading: true, loginError: null });
-    await delay(50);
-    const user = MOCK_USERS.find((u) => u.id === userId);
-    if (user) {
-      const { password: _, ...safeUser } = user;
-      useProjectContextStore.getState().clearProject();
-      set({ currentUser: safeUser, isLoading: false });
-    } else {
-      set({ isLoading: false });
     }
   },
 
   logout: async () => {
     set({ isLoading: true });
-    await delay(50);
-    useProjectContextStore.getState().clearProject();
-    set({ currentUser: null, isLoading: false, loginError: null });
+    try {
+      await authApi.logout();
+    } finally {
+      useProjectContextStore.getState().clearProject();
+      set({ currentUser: null, isLoading: false, loginError: null });
+    }
   },
 
   getUsers: async () => {
-    await delay(50);
-    return MOCK_USERS.map(({ password: _, ...user }) => user);
+    const { users } = await authApi.getUsers();
+    return users;
   },
 }));
