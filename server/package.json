@@ -10,7 +10,7 @@
     "postinstall": "tsx scripts/generate-prisma.ts",
     "db:generate": "tsx scripts/generate-prisma.ts",
     "db:migrate": "tsx scripts/with-prisma.ts migrate dev --schema prisma/schema.prisma",
-    "db:migrate:deploy": "tsx scripts/with-prisma.ts migrate deploy --schema prisma/postgresql/schema.prisma",
+    "db:migrate:deploy": "tsx scripts/with-prisma.ts migrate deploy --schema prisma/mysql/schema.prisma",
     "db:seed": "tsx scripts/with-prisma.ts db seed",
     "db:studio": "tsx scripts/with-prisma.ts studio --schema prisma/schema.prisma",
     "plesk:build": "npm install --include=dev && npm run build"
