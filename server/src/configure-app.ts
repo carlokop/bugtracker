@@ -16,9 +16,13 @@ import { PROJECT_ROOT, SERVER_ROOT } from "./lib/paths.js";
 
 export function configureApp(app: express.Application): void {
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+  const publicPath = path.join(PROJECT_ROOT, "public");
   const distPath = path.join(PROJECT_ROOT, "dist");
+  const frontendPath = fs.existsSync(path.join(publicPath, "index.html"))
+    ? publicPath
+    : distPath;
   const serveFrontend =
-    isProduction() && fs.existsSync(path.join(distPath, "index.html"));
+    isProduction() && fs.existsSync(path.join(frontendPath, "index.html"));
 
   if (!process.env.SESSION_SECRET) {
     throw new Error("SESSION_SECRET is required (server/.env of Plesk env vars)");
@@ -50,9 +54,9 @@ export function configureApp(app: express.Application): void {
   app.use("/api/screenshots", screenshotRoutes);
 
   if (serveFrontend) {
-    app.use(express.static(distPath));
+    app.use(express.static(frontendPath));
     app.get(/^(?!\/api).*/, (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(frontendPath, "index.html"));
     });
   }
 

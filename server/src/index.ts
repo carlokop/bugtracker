@@ -1,6 +1,7 @@
 import "./lib/paths.js";
 import "./lib/database-env.js";
 import express from "express";
+import { configureApp } from "./configure-app.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -11,7 +12,6 @@ app.get("/api/health", (_req, res) => {
 });
 
 try {
-  const { configureApp } = await import("./configure-app.js");
   configureApp(app);
   console.log("Bugtracker app configured");
 } catch (error) {
