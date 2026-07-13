@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../src/lib/database-env.js";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "../src/lib/password.js";
 
