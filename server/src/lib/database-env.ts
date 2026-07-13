@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./paths.js";
 
 export type AppEnv = "development" | "production";
 
@@ -15,13 +15,13 @@ export function isProduction(): boolean {
   return getAppEnv() === "production";
 }
 
-export function isPostgresDatabase(): boolean {
+export function isMariaDbDatabase(): boolean {
   return isProduction();
 }
 
-function buildPostgresUrl(): string {
+function buildMariaDbUrl(): string {
   const host = process.env.DB_HOST?.trim();
-  const port = process.env.DB_PORT?.trim() || "5432";
+  const port = process.env.DB_PORT?.trim() || "3306";
   const database = process.env.DB_NAME?.trim();
   const user = process.env.DB_USER?.trim();
   const password = process.env.DB_PASSWORD ?? "";
@@ -41,17 +41,15 @@ function buildPostgresUrl(): string {
   const ssl = process.env.DB_SSL?.trim().toLowerCase();
   let query = "";
   if (ssl === "true" || ssl === "require") {
-    query = "?sslmode=require";
-  } else if (ssl === "verify-full") {
-    query = "?sslmode=verify-full";
+    query = "?sslaccept=strict";
   }
 
-  return `postgresql://${auth}@${host}:${port}/${encodeURIComponent(database)}${query}`;
+  return `mysql://${auth}@${host}:${port}/${encodeURIComponent(database)}${query}`;
 }
 
 export function configureDatabaseEnv(): void {
   if (isProduction()) {
-    process.env.DATABASE_URL = buildPostgresUrl();
+    process.env.DATABASE_URL = buildMariaDbUrl();
     return;
   }
 

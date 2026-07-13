@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -104,16 +104,16 @@ model FeedbackItem {
   projectId           String
   type                FeedbackType
   status              String
-  problemDescription  String
-  definitionOfDone    String
+  problemDescription  String       @db.Text
+  definitionOfDone    String       @db.Text
   deviceType          DeviceType
   hasLocation         Boolean      @default(false)
-  pageUrl             String?
-  cssSelector         String?
+  pageUrl             String?      @db.Text
+  cssSelector         String?      @db.Text
   x                   Float?
   y                   Float?
-  screenshotUrl       String?
-  deliveryDescription String?
+  screenshotUrl       String?      @db.Text
+  deliveryDescription String?      @db.Text
   linkedFeatureId     String?
   createdBy           String
   createdAt           DateTime     @default(now())
@@ -128,7 +128,7 @@ model FeedbackComment {
   id             String   @id @default(cuid())
   feedbackItemId String
   userId         String
-  text           String
+  text           String   @db.Text
   createdAt      DateTime @default(now())
 
   feedbackItem FeedbackItem @relation(fields: [feedbackItemId], references: [id], onDelete: Cascade)
@@ -140,7 +140,7 @@ model Notification {
   userId      String
   type        NotificationType
   referenceId String
-  message     String
+  message     String           @db.Text
   read        Boolean          @default(false)
   createdAt   DateTime         @default(now())
 
