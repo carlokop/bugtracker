@@ -22,7 +22,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "npm run db:migrate --prefix server",
-    "db:seed": "npm run db:seed --prefix server"
+    "db:migrate:deploy": "npm run db:migrate:deploy --prefix server",
+    "db:seed": "npm run db:seed --prefix server",
+    "db:setup:production": "npm run db:setup:production --prefix server"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",
