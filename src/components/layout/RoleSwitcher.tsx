@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -9,14 +10,18 @@ import { MOCK_USERS } from "@/mock/seed";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export function RoleSwitcher() {
-  const { currentUser, login } = useAuthStore();
+  const { currentUser, loginAsUser } = useAuthStore();
+  const navigate = useNavigate();
 
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground">Dev: wissel rol</p>
       <Select
         value={currentUser?.id ?? ""}
-        onValueChange={(value) => login(value)}
+        onValueChange={async (value) => {
+          await loginAsUser(value);
+          navigate("/select-project");
+        }}
       >
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Kies gebruiker" />

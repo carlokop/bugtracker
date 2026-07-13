@@ -1,11 +1,36 @@
-export function MockWebsite({ pageUrl }: { pageUrl: string }) {
+export function MockWebsite({
+  pageUrl,
+  onNavigate,
+}: {
+  pageUrl: string;
+  onNavigate?: (path: string) => void;
+}) {
   if (pageUrl === "/contact") {
-    return <ContactPage />;
+    return <ContactPage onNavigate={onNavigate} />;
   }
-  return <HomePage />;
+  return <HomePage onNavigate={onNavigate} />;
 }
 
-function HomePage() {
+function HomePage({ onNavigate }: { onNavigate?: (path: string) => void }) {
+  const link = (path: string, label: string, active = false) =>
+    onNavigate ? (
+      <button
+        type="button"
+        className={
+          active
+            ? "font-medium text-gray-900"
+            : "text-gray-600 hover:text-gray-900"
+        }
+        onClick={() => onNavigate(path)}
+      >
+        {label}
+      </button>
+    ) : (
+      <a href="#" className="text-gray-600 hover:text-gray-900">
+        {label}
+      </a>
+    );
+
   return (
     <div className="min-h-full bg-white text-gray-900">
       <header className="border-b bg-white px-6 py-4">
@@ -17,18 +42,10 @@ function HomePage() {
             <span className="hero-logo text-lg font-bold">Bakkerij Van Dijk</span>
           </div>
           <nav className="hidden gap-6 text-sm md:flex">
-            <a href="#" className="text-gray-600 hover:text-gray-900">
-              Home
-            </a>
-            <a href="#" className="text-gray-600 hover:text-gray-900">
-              Producten
-            </a>
-            <a href="#" className="text-gray-600 hover:text-gray-900">
-              Over ons
-            </a>
-            <a href="#" className="text-gray-600 hover:text-gray-900">
-              Contact
-            </a>
+            {link("/", "Home", true)}
+            {link("/", "Producten")}
+            {link("/", "Over ons")}
+            {link("/contact", "Contact")}
           </nav>
         </div>
       </header>
@@ -42,7 +59,10 @@ function HomePage() {
             Ontdek ons assortiment ambachtelijk brood, gebak en taarten.
             Bestel online of kom langs in onze winkel.
           </p>
-          <button className="hero-cta rounded-full bg-amber-500 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:bg-amber-600">
+          <button
+            type="button"
+            className="hero-cta rounded-full bg-amber-500 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:bg-amber-600"
+          >
             Bekijk ons assortiment
           </button>
         </div>
@@ -74,17 +94,38 @@ function HomePage() {
   );
 }
 
-function ContactPage() {
+function ContactPage({ onNavigate }: { onNavigate?: (path: string) => void }) {
   return (
     <div className="min-h-full bg-white text-gray-900">
       <header className="border-b bg-white px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <span className="text-lg font-bold">Bakkerij Van Dijk</span>
+          {onNavigate ? (
+            <button
+              type="button"
+              className="text-lg font-bold"
+              onClick={() => onNavigate("/")}
+            >
+              Bakkerij Van Dijk
+            </button>
+          ) : (
+            <span className="text-lg font-bold">Bakkerij Van Dijk</span>
+          )}
           <nav className="flex gap-4 text-sm text-gray-600">
-            <a href="#">Home</a>
-            <a href="#" className="font-medium text-gray-900">
-              Contact
-            </a>
+            {onNavigate ? (
+              <>
+                <button type="button" onClick={() => onNavigate("/")}>
+                  Home
+                </button>
+                <span className="font-medium text-gray-900">Contact</span>
+              </>
+            ) : (
+              <>
+                <a href="#">Home</a>
+                <a href="#" className="font-medium text-gray-900">
+                  Contact
+                </a>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -107,6 +148,16 @@ function ContactPage() {
                 type="email"
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 placeholder="uw@email.nl"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Telefoonnummer (optioneel)
+              </label>
+              <input
+                type="tel"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                placeholder="06-12345678"
               />
             </div>
             <div>

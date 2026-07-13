@@ -1,21 +1,13 @@
 import { Badge } from "@/components/ui/badge";
-import type { FeedbackStatus } from "@/types";
-import { FEEDBACK_STATUS_LABELS } from "@/types";
+import type { FeedbackItem } from "@/types";
+import { getStatusLabel } from "@/types";
+import { getStatusVariant } from "@/lib/status-styles";
 
-const statusVariant: Record<
-  FeedbackStatus,
-  "open" | "progress" | "review" | "done"
-> = {
-  open: "open",
-  in_progress: "progress",
-  in_review: "review",
-  done: "done",
-};
-
-export function StatusBadge({ status }: { status: FeedbackStatus }) {
+export function StatusBadge({ item }: { item: FeedbackItem }) {
+  const variant = getStatusVariant(item.status, item.type);
   return (
-    <Badge variant={statusVariant[status]}>
-      {FEEDBACK_STATUS_LABELS[status]}
+    <Badge variant={variant}>
+      {getStatusLabel(item.status, item.type)}
     </Badge>
   );
 }

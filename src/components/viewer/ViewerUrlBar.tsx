@@ -30,30 +30,30 @@ export function ViewerUrlBar({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl"
+      className="flex w-full min-w-0 items-center gap-2"
     >
       <Input
         type="url"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="https://voorbeeld.nl of /contact"
-        className="h-8 bg-background font-mono text-xs sm:text-sm"
+        placeholder="URL of pad, bijv. /contact"
+        className="h-10 min-w-0 flex-1 bg-background font-mono text-xs sm:text-sm"
         spellCheck={false}
       />
-      <Button type="submit" size="sm" variant="secondary" className="shrink-0">
+      <Button type="submit" size="icon" variant="secondary" className="shrink-0" aria-label="Navigeer">
         <ArrowRight className="h-4 w-4" />
-        <span className="hidden sm:inline">Ga</span>
       </Button>
       {defaultUrl && value !== defaultUrl && (
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0"
+          className="shrink-0"
           title="Terug naar project-URL"
+          aria-label="Reset URL"
           onClick={handleReset}
         >
-          <RotateCcw className="h-3.5 w-3.5" />
+          <RotateCcw className="h-4 w-4" />
         </Button>
       )}
     </form>

@@ -27,7 +27,7 @@ export function KanbanCard({
       draggable={canDrag}
       onDragStart={canDrag ? (e) => onDragStart(e, item.id) : undefined}
       className={cn(
-        "group rounded-lg border border-border/60 bg-card p-3 shadow-xs transition-all hover:border-border hover:shadow-sm",
+        "group rounded-xl border border-border/60 bg-card p-3 shadow-xs transition-all hover:border-border hover:shadow-sm active:scale-[0.99]",
         canDrag && "cursor-grab active:cursor-grabbing",
       )}
     >
@@ -67,7 +67,7 @@ export function KanbanCard({
         <FeedbackTypeBadge type={item.type} />
         <DeviceTypeBadge deviceType={item.deviceType} />
         <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-          {item.pageUrl}
+          {item.hasLocation && item.pageUrl ? item.pageUrl : "Geen locatie"}
         </span>
       </div>
       <div className="flex items-center justify-between border-t border-border/50 pt-2">

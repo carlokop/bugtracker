@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MapPin } from "lucide-react";
 import { MockWebsite } from "@/mock/MockWebsite";
 import { ScreenshotPin } from "@/components/feedback/ScreenshotPin";
 import type { FeedbackItem } from "@/types";
@@ -10,6 +11,15 @@ interface FeedbackScreenshotProps {
 }
 
 export function FeedbackScreenshot({ item }: FeedbackScreenshotProps) {
+  if (!item.hasLocation || item.x == null || item.y == null) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/30 p-8 text-sm text-muted-foreground">
+        <MapPin className="h-4 w-4 shrink-0" />
+        Geen locatie op de site aangegeven
+      </div>
+    );
+  }
+
   if (item.screenshotUrl) {
     return <CapturedScreenshot item={item} />;
   }
@@ -18,7 +28,7 @@ export function FeedbackScreenshot({ item }: FeedbackScreenshotProps) {
 
 function CapturedScreenshot({ item }: { item: FeedbackItem }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [pinPos, setPinPos] = useState({ x: item.x, y: item.y });
+  const [pinPos, setPinPos] = useState({ x: item.x!, y: item.y! });
 
   const updatePinPosition = useCallback(() => {
     const container = containerRef.current;
@@ -26,7 +36,7 @@ function CapturedScreenshot({ item }: { item: FeedbackItem }) {
     if (!img?.naturalWidth) return;
 
     const scale = img.clientWidth / img.naturalWidth;
-    setPinPos({ x: item.x * scale, y: item.y * scale });
+    setPinPos({ x: item.x! * scale, y: item.y! * scale });
   }, [item.x, item.y]);
 
   useEffect(() => {
@@ -39,9 +49,12 @@ function CapturedScreenshot({ item }: { item: FeedbackItem }) {
   }, [updatePinPosition]);
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden rounded-xl border bg-muted/30">
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden rounded-xl border bg-muted/30"
+    >
       <img
-        src={item.screenshotUrl}
+        src={item.screenshotUrl!}
         alt="Screenshot van feedback-locatie"
         className="block w-full"
         onLoad={updatePinPosition}
@@ -69,6 +82,8 @@ function MockPagePreview({ item }: { item: FeedbackItem }) {
     return () => observer.disconnect();
   }, []);
 
+  if (!item.pageUrl) return null;
+
   return (
     <div
       ref={containerRef}
@@ -83,7 +98,7 @@ function MockPagePreview({ item }: { item: FeedbackItem }) {
       >
         <MockWebsite pageUrl={item.pageUrl} />
       </div>
-      <ScreenshotPin x={item.x * scale} y={item.y * scale} />
+      <ScreenshotPin x={item.x! * scale} y={item.y! * scale} />
       <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-border/50" />
     </div>
   );

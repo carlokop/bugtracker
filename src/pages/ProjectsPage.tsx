@@ -43,7 +43,10 @@ export function ProjectsPage() {
     const withCounts = await Promise.all(
       projs.map(async (p) => {
         const counts = await getCountsByProject(p.id);
-        return { ...p, openCount: counts.open };
+        return {
+          ...p,
+          openCount: counts.bugs.open + counts.features.delivered,
+        };
       }),
     );
     setProjects(withCounts);

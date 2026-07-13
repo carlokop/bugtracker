@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle, Clock, FolderOpen } from "lucide-react";
+import { ArrowRight, Bug, CheckCircle, FolderOpen, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -13,10 +13,10 @@ import {
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useFeedbackStore } from "@/store/useFeedbackStore";
-import type { FeedbackStatus, Project } from "@/types";
+import type { Project, ProjectFeedbackCounts } from "@/types";
 
 interface ProjectWithCounts extends Project {
-  counts: Record<FeedbackStatus, number>;
+  counts: ProjectFeedbackCounts;
 }
 
 export function DashboardPage() {
@@ -44,8 +44,18 @@ export function DashboardPage() {
   if (!currentUser) return null;
 
   const isAdmin = currentUser.role === "admin";
-  const totalOpen = projects.reduce((sum, p) => sum + p.counts.open, 0);
-  const totalDone = projects.reduce((sum, p) => sum + p.counts.done, 0);
+  const totalOpenBugs = projects.reduce(
+    (sum, p) => sum + p.counts.bugs.open,
+    0,
+  );
+  const totalDeliveredFeatures = projects.reduce(
+    (sum, p) => sum + p.counts.features.delivered,
+    0,
+  );
+  const totalDoneBugs = projects.reduce(
+    (sum, p) => sum + p.counts.bugs.done,
+    0,
+  );
 
   return (
     <div className="space-y-8">
@@ -54,43 +64,56 @@ export function DashboardPage() {
         description={`Welkom terug, ${currentUser.name}`}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Card className="border-border/80">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
               Projecten
             </CardTitle>
             <FolderOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-2xl font-semibold tracking-tight sm:text-3xl">
               {projects.length}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Open feedback
+        <Card className="border-border/80">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
+              Open bugs
             </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Bug className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">
-              {totalOpen}
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {totalOpenBugs}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Afgerond
+        <Card className="border-border/80">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
+              Features te beoordelen
+            </CardTitle>
+            <Sparkles className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {totalDeliveredFeatures}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/80">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6">
+            <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">
+              Bugs opgelost
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold tracking-tight">
-              {totalDone}
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              {totalDoneBugs}
             </div>
           </CardContent>
         </Card>
@@ -120,15 +143,39 @@ export function DashboardPage() {
                   <CardDescription>{project.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    Bugs
+                  </div>
                   <div className="mb-4 flex flex-wrap gap-2">
-                    <Badge variant="open">{project.counts.open} open</Badge>
+                    <Badge variant="open">
+                      {project.counts.bugs.open} open
+                    </Badge>
                     <Badge variant="progress">
-                      {project.counts.in_progress} in behandeling
+                      {project.counts.bugs.in_progress} in behandeling
                     </Badge>
                     <Badge variant="review">
-                      {project.counts.in_review} in review
+                      {project.counts.bugs.in_review} ter goedkeuring
                     </Badge>
-                    <Badge variant="done">{project.counts.done} gedaan</Badge>
+                    <Badge variant="done">
+                      {project.counts.bugs.done} gedaan
+                    </Badge>
+                  </div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    Features
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <Badge variant="open">
+                      {project.counts.features.requested} aangevraagd
+                    </Badge>
+                    <Badge variant="progress">
+                      {project.counts.features.in_progress} in ontwikkeling
+                    </Badge>
+                    <Badge variant="review">
+                      {project.counts.features.delivered} opgeleverd
+                    </Badge>
+                    <Badge variant="done">
+                      {project.counts.features.accepted} geaccepteerd
+                    </Badge>
                   </div>
                   <div className="flex flex-wrap gap-3 border-t border-border/60 pt-4">
                     <Link

@@ -9,77 +9,97 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { MOCK_USERS } from "@/mock/seed";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export function LoginPage() {
-  const { currentUser, login, isLoading } = useAuthStore();
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const { currentUser, login, isLoading, loginError } = useAuthStore();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   if (currentUser) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/select-project" replace />;
   }
 
-  const handleLogin = async () => {
-    if (selectedUserId) {
-      await login(selectedUserId);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email && password) {
+      await login(email, password);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <MapPin className="h-6 w-6" />
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+      <div className="w-full max-w-md">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+            <MapPin className="h-7 w-7" />
           </div>
-          <div className="space-y-1">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Bugtracker
-            </CardTitle>
-            <CardDescription>
-              Website feedback & annotatie platform
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="user-select">Kies een demo-gebruiker</Label>
-            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-              <SelectTrigger id="user-select">
-                <SelectValue placeholder="Selecteer gebruiker..." />
-              </SelectTrigger>
-              <SelectContent>
-                {MOCK_USERS.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name} —{" "}
-                    {user.role === "admin" ? "Developer" : "Klant"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            className="w-full"
-            disabled={!selectedUserId || isLoading}
-            onClick={handleLogin}
-          >
-            {isLoading ? "Inloggen..." : "Inloggen (demo)"}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Mock login — geen echte authenticatie in deze fase
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Bugtracker
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Website feedback & annotatie platform
           </p>
-        </CardContent>
-      </Card>
+        </div>
+
+        <Card className="border-border/80 shadow-lg">
+          <CardHeader className="pb-2 text-center sm:text-left">
+            <CardTitle className="text-lg">Inloggen</CardTitle>
+            <CardDescription>
+              Log in met je e-mailadres en wachtwoord
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">E-mailadres</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="jouw@email.nl"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Wachtwoord</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-11"
+                />
+              </div>
+              {loginError && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {loginError}
+                </p>
+              )}
+              <Button
+                type="submit"
+                className="h-11 w-full"
+                size="lg"
+                disabled={!email || !password || isLoading}
+              >
+                {isLoading ? "Inloggen..." : "Inloggen"}
+              </Button>
+            </form>
+            <p className="mt-5 rounded-xl bg-muted/60 px-3 py-2.5 text-center text-xs leading-relaxed text-muted-foreground">
+              Demo: dev@agency.nl / admin123
+              <br />
+              of klant@bakkerij.nl / klant123
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

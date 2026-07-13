@@ -6,7 +6,7 @@ import {
 } from "@/mock/seed";
 import { delay } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { CreateProjectInput, Project, User } from "@/types";
+import type { CreateClientUserInput, CreateProjectInput, Project, UpdateClientUserInput, User } from "@/types";
 
 function assertAdmin() {
   const user = useAuthStore.getState().currentUser;
@@ -24,6 +24,14 @@ interface ProjectState {
   getProjectsForUser: (userId: string, role: string) => Promise<Project[]>;
   createProject: (input: CreateProjectInput, adminId: string) => Promise<Project>;
   inviteClient: (projectId: string, email: string) => Promise<User>;
+  createClientUser: (
+    projectId: string,
+    input: CreateClientUserInput,
+  ) => Promise<User>;
+  updateClientUser: (
+    userId: string,
+    input: UpdateClientUserInput,
+  ) => Promise<User>;
   removeClient: (projectId: string, userId: string) => Promise<void>;
   getProjectMembers: (projectId: string) => Promise<User[]>;
 }
@@ -78,6 +86,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         email,
         name: email.split("@")[0],
         role: "client",
+        password: "welkom123",
       };
       MOCK_USERS.push(user);
     }
@@ -89,7 +98,61 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         members: [...state.members, { projectId, userId: user!.id }],
       }));
     }
-    return user;
+    const { password: _, ...safeUser } = user;
+    return safeUser;
+  },
+
+  createClientUser: async (projectId: string, input: CreateClientUserInput) => {
+    assertAdmin();
+    await delay();
+    const existing = MOCK_USERS.find(
+      (u) => u.email.toLowerCase() === input.email.toLowerCase(),
+    );
+    if (existing) {
+      throw new Error("Er bestaat al een account met dit e-mailadres");
+    }
+    const user: User = {
+      id: `user-client-${Date.now()}`,
+      email: input.email,
+      name: input.name ?? input.email.split("@")[0],
+      role: "client",
+      password: input.password,
+    };
+    MOCK_USERS.push(user);
+    set((state) => ({
+      members: [...state.members, { projectId, userId: user.id }],
+    }));
+    const { password: _, ...safeUser } = user;
+    return safeUser;
+  },
+
+  updateClientUser: async (userId: string, input: UpdateClientUserInput) => {
+    assertAdmin();
+    await delay();
+    const index = MOCK_USERS.findIndex((u) => u.id === userId);
+    if (index === -1) {
+      throw new Error("Gebruiker niet gevonden");
+    }
+    const user = MOCK_USERS[index];
+    if (user.role !== "client") {
+      throw new Error("Alleen klantaccounts kunnen worden bewerkt");
+    }
+    if (input.email) {
+      const emailTaken = MOCK_USERS.some(
+        (u) =>
+          u.id !== userId &&
+          u.email.toLowerCase() === input.email!.toLowerCase(),
+      );
+      if (emailTaken) {
+        throw new Error("Dit e-mailadres is al in gebruik");
+      }
+      user.email = input.email;
+    }
+    if (input.name) user.name = input.name;
+    if (input.password) user.password = input.password;
+    MOCK_USERS[index] = user;
+    const { password: _, ...safeUser } = user;
+    return safeUser;
   },
 
   removeClient: async (projectId: string, userId: string) => {

@@ -1,10 +1,18 @@
 export type UserRole = "admin" | "client";
 
-export type FeedbackStatus =
-  | "open"
+export type BugStatus = "open" | "in_progress" | "in_review" | "done";
+
+export type FeatureStatus =
+  | "requested"
+  | "approved"
   | "in_progress"
-  | "in_review"
-  | "done";
+  | "delivered"
+  | "accepted";
+
+/** @deprecated Use BugStatus or FeatureStatus per item.type */
+export type FeedbackStatus = BugStatus;
+
+export type ItemStatus = BugStatus | FeatureStatus;
 
 export type DeviceType = "desktop" | "tablet" | "mobile";
 
@@ -12,6 +20,8 @@ export type FeedbackType = "bug" | "feature";
 
 export type NotificationType =
   | "new_feedback"
+  | "new_bug"
+  | "new_feature"
   | "new_comment"
   | "status_change"
   | "mention";
@@ -21,6 +31,20 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  /** Mock only — in productie wordt een hash opgeslagen */
+  password?: string;
+}
+
+export interface CreateClientUserInput {
+  email: string;
+  password: string;
+  name?: string;
+}
+
+export interface UpdateClientUserInput {
+  email?: string;
+  password?: string;
+  name?: string;
 }
 
 export interface Project {
@@ -40,16 +64,19 @@ export interface ProjectMember {
 export interface FeedbackItem {
   id: string;
   projectId: string;
-  pageUrl: string;
-  cssSelector: string;
-  x: number;
-  y: number;
-  screenshotUrl: string;
+  type: FeedbackType;
+  status: ItemStatus;
   problemDescription: string;
   definitionOfDone: string;
-  type: FeedbackType;
-  status: FeedbackStatus;
   deviceType: DeviceType;
+  hasLocation: boolean;
+  pageUrl: string | null;
+  cssSelector: string | null;
+  x: number | null;
+  y: number | null;
+  screenshotUrl: string | null;
+  deliveryDescription?: string | null;
+  linkedFeatureId?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -79,7 +106,7 @@ export interface CreateProjectInput {
   description: string;
 }
 
-export interface CreateFeedbackInput {
+export interface CreateBugInput {
   projectId: string;
   pageUrl: string;
   cssSelector: string;
@@ -89,7 +116,29 @@ export interface CreateFeedbackInput {
   problemDescription: string;
   definitionOfDone: string;
   deviceType: DeviceType;
-  type: FeedbackType;
+  linkedFeatureId?: string;
+}
+
+export interface CreateFeatureInput {
+  projectId: string;
+  problemDescription: string;
+  definitionOfDone: string;
+  deviceType: DeviceType;
+  pageUrl?: string;
+  cssSelector?: string;
+  x?: number;
+  y?: number;
+  screenshotUrl?: string;
+}
+
+export interface DeliverFeatureInput {
+  pageUrl: string;
+  cssSelector: string;
+  x: number;
+  y: number;
+  screenshotUrl: string;
+  deliveryDescription: string;
+  deviceType: DeviceType;
 }
 
 export interface ConvertFeatureToBugInput {
@@ -104,23 +153,44 @@ export interface ConvertFeatureToBugInput {
 }
 
 export interface FeedbackFilters {
-  status?: FeedbackStatus;
+  status?: ItemStatus;
   pageUrl?: string;
   deviceType?: DeviceType;
+  type?: FeedbackType;
 }
 
-export const FEEDBACK_STATUS_LABELS: Record<FeedbackStatus, string> = {
+export const BUG_STATUS_LABELS: Record<BugStatus, string> = {
   open: "Open",
   in_progress: "In behandeling",
   in_review: "Ter goedkeuring",
   done: "Gedaan",
 };
 
-export const BOARD_STATUSES: FeedbackStatus[] = [
+export const FEATURE_STATUS_LABELS: Record<FeatureStatus, string> = {
+  requested: "Aangevraagd",
+  approved: "Goedgekeurd",
+  in_progress: "In ontwikkeling",
+  delivered: "Opgeleverd",
+  accepted: "Geaccepteerd",
+};
+
+/** @deprecated Use BUG_STATUS_LABELS */
+export const FEEDBACK_STATUS_LABELS: Record<BugStatus, string> =
+  BUG_STATUS_LABELS;
+
+export const BOARD_STATUSES: BugStatus[] = [
   "open",
   "in_progress",
   "in_review",
   "done",
+];
+
+export const FEATURE_BOARD_STATUSES: FeatureStatus[] = [
+  "requested",
+  "approved",
+  "in_progress",
+  "delivered",
+  "accepted",
 ];
 
 export const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
@@ -133,3 +203,26 @@ export const FEEDBACK_TYPE_LABELS: Record<FeedbackType, string> = {
   bug: "Bug",
   feature: "Feature",
 };
+
+export function getStatusLabel(
+  status: ItemStatus,
+  type: FeedbackType,
+): string {
+  if (type === "bug") {
+    return BUG_STATUS_LABELS[status as BugStatus];
+  }
+  return FEATURE_STATUS_LABELS[status as FeatureStatus];
+}
+
+export function isBugItem(item: FeedbackItem): boolean {
+  return item.type === "bug";
+}
+
+export function isFeatureItem(item: FeedbackItem): boolean {
+  return item.type === "feature";
+}
+
+export interface ProjectFeedbackCounts {
+  bugs: Record<BugStatus, number>;
+  features: Record<FeatureStatus, number>;
+}

@@ -1,4 +1,4 @@
-import { CheckCircle, RotateCcw, XCircle } from "lucide-react";
+import { Bug, CheckCircle, Eye, MapPin, Play, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -8,17 +8,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { FeedbackItem, FeedbackStatus } from "@/types";
-import { BOARD_STATUSES, FEEDBACK_STATUS_LABELS } from "@/types";
+import type { FeedbackItem, ItemStatus } from "@/types";
+import {
+  BOARD_STATUSES,
+  BUG_STATUS_LABELS,
+  FEATURE_BOARD_STATUSES,
+  FEATURE_STATUS_LABELS,
+} from "@/types";
 
 interface FeedbackItemActionsProps {
   item: FeedbackItem;
   isAdmin: boolean;
   isClient: boolean;
-  onStatusChange: (status: FeedbackStatus) => void;
-  onClientMarkDone: () => void;
+  onStatusChange: (status: ItemStatus) => void;
+  onAdminStartWork?: () => void;
+  onAdminReadyForReview?: () => void;
   onApproval: (approved: boolean) => void;
   onUndoApproval: () => void;
+  onFeatureApprove?: () => void;
+  onFeatureStart?: () => void;
+  onFeatureDeliver?: () => void;
+  onFeatureAccept?: (accepted: boolean) => void;
+  onFeatureConvertToBug?: () => void;
+  onFeatureUndoAccept?: () => void;
 }
 
 export function FeedbackItemActions({
@@ -26,22 +38,109 @@ export function FeedbackItemActions({
   isAdmin,
   isClient,
   onStatusChange,
-  onClientMarkDone,
+  onAdminStartWork,
+  onAdminReadyForReview,
   onApproval,
   onUndoApproval,
+  onFeatureApprove,
+  onFeatureStart,
+  onFeatureDeliver,
+  onFeatureAccept,
+  onFeatureConvertToBug,
+  onFeatureUndoAccept,
 }: FeedbackItemActionsProps) {
-  const showApproval = item.status === "in_review" && (isAdmin || isClient);
-  const showUndoApproval = item.status === "done" && (isAdmin || isClient);
+  if (item.type === "bug") {
+    return (
+      <BugActions
+        item={item}
+        isAdmin={isAdmin}
+        isClient={isClient}
+        onStatusChange={onStatusChange}
+        onAdminStartWork={onAdminStartWork}
+        onAdminReadyForReview={onAdminReadyForReview}
+        onApproval={onApproval}
+        onUndoApproval={onUndoApproval}
+      />
+    );
+  }
+
+  return (
+    <FeatureActions
+      item={item}
+      isAdmin={isAdmin}
+      isClient={isClient}
+      onStatusChange={onStatusChange}
+      onFeatureApprove={onFeatureApprove}
+      onFeatureStart={onFeatureStart}
+      onFeatureDeliver={onFeatureDeliver}
+      onFeatureAccept={onFeatureAccept}
+      onFeatureConvertToBug={onFeatureConvertToBug}
+      onFeatureUndoAccept={onFeatureUndoAccept}
+    />
+  );
+}
+
+function BugActions({
+  item,
+  isAdmin,
+  isClient,
+  onStatusChange,
+  onAdminStartWork,
+  onAdminReadyForReview,
+  onApproval,
+  onUndoApproval,
+}: Pick<
+  FeedbackItemActionsProps,
+  | "item"
+  | "isAdmin"
+  | "isClient"
+  | "onStatusChange"
+  | "onAdminStartWork"
+  | "onAdminReadyForReview"
+  | "onApproval"
+  | "onUndoApproval"
+>) {
+  const showClientReview = item.status === "in_review" && isClient;
+  const showAdminWaitingForReview =
+    item.status === "in_review" && isAdmin && !isClient;
+  const showUndoApproval = item.status === "done";
 
   return (
     <div className="space-y-4 border-t border-border/60 pt-4">
-      {showApproval && (
+      {isAdmin && item.status === "open" && onAdminStartWork && (
+        <div className="rounded-lg border border-status-open/30 bg-status-open/10 p-4">
+          <h3 className="mb-2 text-sm font-medium">Aan de slag</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Geef aan dat je aan deze bug werkt. De klant wordt op de hoogte
+            gesteld.
+          </p>
+          <Button size="sm" onClick={onAdminStartWork}>
+            <Play className="h-4 w-4" />
+            In behandeling nemen
+          </Button>
+        </div>
+      )}
+
+      {isAdmin && item.status === "in_progress" && onAdminReadyForReview && (
+        <div className="rounded-lg border border-status-progress/30 bg-status-progress/10 p-4">
+          <h3 className="mb-2 text-sm font-medium">Klaar voor review</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            De fix is klaar. Vraag de klant om te controleren of de bug is
+            opgelost.
+          </p>
+          <Button size="sm" onClick={onAdminReadyForReview}>
+            <Eye className="h-4 w-4" />
+            Ter goedkeuring — vraag klant om te kijken
+          </Button>
+        </div>
+      )}
+
+      {showClientReview && (
         <div className="space-y-3 rounded-lg border border-status-review/30 bg-status-review/10 p-4">
-          <h3 className="text-sm font-medium">Goedkeuring</h3>
+          <h3 className="text-sm font-medium">Controleer de fix</h3>
           <p className="text-sm text-muted-foreground">
-            {isClient
-              ? "Controleer of dit punt naar tevredenheid is opgelost en keur goed of wijs af."
-              : "De klant heeft aangegeven dat dit gedaan is. Keur goed of wijs af."}
+            De developer heeft aangegeven dat deze bug is opgelost. Controleer
+            of het probleem naar tevredenheid is verholpen.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => onApproval(true)}>
@@ -60,50 +159,49 @@ export function FeedbackItemActions({
         </div>
       )}
 
+      {showAdminWaitingForReview && (
+        <div className="rounded-lg border border-status-review/30 bg-status-review/10 p-4">
+          <h3 className="text-sm font-medium">Wacht op klantreview</h3>
+          <p className="text-sm text-muted-foreground">
+            De klant is gevraagd om te controleren of deze bug is opgelost.
+          </p>
+        </div>
+      )}
+
       {showUndoApproval && (
         <div className="space-y-3 rounded-lg border border-status-done/30 bg-status-done/10 p-4">
           <h3 className="text-sm font-medium">Goedgekeurd</h3>
           <p className="text-sm text-muted-foreground">
-            Dit feedback-item is goedgekeurd. Je kunt de goedkeuring ongedaan
-            maken om het opnieuw ter goedkeuring te zetten.
+            Deze bug is goedgekeurd door de klant.
           </p>
-          <Button size="sm" variant="outline" onClick={onUndoApproval}>
-            <RotateCcw className="h-4 w-4" />
-            Goedkeuring ongedaan maken
-          </Button>
+          {(isAdmin || isClient) && (
+            <Button size="sm" variant="outline" onClick={onUndoApproval}>
+              <RotateCcw className="h-4 w-4" />
+              Goedkeuring ongedaan maken
+            </Button>
+          )}
         </div>
       )}
 
-      {isClient && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Jouw actie</h3>
-          {item.status === "in_progress" && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-              <p className="mb-3 text-sm text-muted-foreground">
-                Is dit punt naar tevredenheid opgelost? Geef het aan ter
-                goedkeuring.
-              </p>
-              <Button size="sm" onClick={onClientMarkDone}>
-                <CheckCircle className="h-4 w-4" />
-                Aangeven als gedaan
-              </Button>
-            </div>
-          )}
-          {item.status === "open" && (
-            <p className="text-sm text-muted-foreground">
-              Zodra de developer aan dit punt werkt, kun je hier aangeven of het
-              gedaan is.
-            </p>
-          )}
-        </div>
+      {isClient && item.status === "open" && (
+        <p className="text-sm text-muted-foreground">
+          De developer neemt deze bug in behandeling zodra hij eraan werkt.
+        </p>
+      )}
+
+      {isClient && item.status === "in_progress" && (
+        <p className="text-sm text-muted-foreground">
+          De developer werkt aan deze bug. Je ontvangt een melding zodra je
+          kunt controleren of het is opgelost.
+        </p>
       )}
 
       {isAdmin && (
         <div className="space-y-2">
-          <Label htmlFor="feedback-status">Status wijzigen</Label>
+          <Label htmlFor="feedback-status">Status handmatig wijzigen</Label>
           <Select
             value={item.status}
-            onValueChange={(v) => onStatusChange(v as FeedbackStatus)}
+            onValueChange={(v) => onStatusChange(v as ItemStatus)}
           >
             <SelectTrigger id="feedback-status" className="w-full sm:w-64">
               <SelectValue />
@@ -111,7 +209,157 @@ export function FeedbackItemActions({
             <SelectContent>
               {BOARD_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {FEEDBACK_STATUS_LABELS[status]}
+                  {BUG_STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureActions({
+  item,
+  isAdmin,
+  isClient,
+  onStatusChange,
+  onFeatureApprove,
+  onFeatureStart,
+  onFeatureDeliver,
+  onFeatureAccept,
+  onFeatureConvertToBug,
+  onFeatureUndoAccept,
+}: Pick<
+  FeedbackItemActionsProps,
+  | "item"
+  | "isAdmin"
+  | "isClient"
+  | "onStatusChange"
+  | "onFeatureApprove"
+  | "onFeatureStart"
+  | "onFeatureDeliver"
+  | "onFeatureAccept"
+  | "onFeatureConvertToBug"
+  | "onFeatureUndoAccept"
+>) {
+  const showClientAcceptance = item.status === "delivered" && isClient;
+  const showAdminWaitingForAcceptance =
+    item.status === "delivered" && isAdmin && !isClient;
+
+  return (
+    <div className="space-y-4 border-t border-border/60 pt-4">
+      {isAdmin && item.status === "requested" && onFeatureApprove && (
+        <div className="rounded-lg border border-status-open/30 bg-status-open/10 p-4">
+          <h3 className="mb-2 text-sm font-medium">Feature plannen</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Zet deze feature klaar om mee te starten.
+          </p>
+          <Button size="sm" onClick={onFeatureApprove}>
+            <CheckCircle className="h-4 w-4" />
+            Goedkeuren
+          </Button>
+        </div>
+      )}
+
+      {isAdmin && item.status === "approved" && onFeatureStart && (
+        <div className="rounded-lg border border-status-progress/30 bg-status-progress/10 p-4">
+          <h3 className="mb-2 text-sm font-medium">Start ontwikkeling</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Geef aan dat je aan deze feature werkt.
+          </p>
+          <Button size="sm" onClick={onFeatureStart}>
+            <Play className="h-4 w-4" />
+            In ontwikkeling nemen
+          </Button>
+        </div>
+      )}
+
+      {isAdmin && item.status === "in_progress" && onFeatureDeliver && (
+        <div className="rounded-lg border border-status-progress/30 bg-status-progress/10 p-4">
+          <h3 className="mb-2 text-sm font-medium">Klaar voor review</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Plaats een marker op de pagina waar de feature is gebouwd en leg
+            uit wat de klant moet controleren.
+          </p>
+          <Button size="sm" onClick={onFeatureDeliver}>
+            <MapPin className="h-4 w-4" />
+            Locatie aangeven en opleveren
+          </Button>
+        </div>
+      )}
+
+      {showClientAcceptance && (
+        <div className="space-y-3 rounded-lg border border-status-review/30 bg-status-review/10 p-4">
+          <h3 className="text-sm font-medium">Beoordeel de feature</h3>
+          <p className="text-sm text-muted-foreground">
+            De developer heeft deze feature opgeleverd. Accepteer als het goed
+            is, of zet om naar een bug als het niet klopt.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {onFeatureAccept && (
+              <Button size="sm" onClick={() => onFeatureAccept(true)}>
+                <CheckCircle className="h-4 w-4" />
+                Accepteren
+              </Button>
+            )}
+            {onFeatureConvertToBug && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onFeatureConvertToBug}
+              >
+                <Bug className="h-4 w-4" />
+                Omzetten naar bug
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAdminWaitingForAcceptance && (
+        <div className="rounded-lg border border-status-review/30 bg-status-review/10 p-4">
+          <h3 className="text-sm font-medium">Wacht op klantreview</h3>
+          <p className="text-sm text-muted-foreground">
+            De klant is gevraagd om te controleren of deze feature naar wens is.
+          </p>
+        </div>
+      )}
+
+      {item.status === "accepted" && onFeatureUndoAccept && (
+        <div className="space-y-3 rounded-lg border border-status-done/30 bg-status-done/10 p-4">
+          <h3 className="text-sm font-medium">Geaccepteerd</h3>
+          {(isAdmin || isClient) && (
+            <Button size="sm" variant="outline" onClick={onFeatureUndoAccept}>
+              <RotateCcw className="h-4 w-4" />
+              Acceptatie ongedaan maken
+            </Button>
+          )}
+        </div>
+      )}
+
+      {isClient && item.status === "in_progress" && (
+        <p className="text-sm text-muted-foreground">
+          De developer werkt aan deze feature. Je ontvangt een melding zodra je
+          kunt controleren of het klaar is.
+        </p>
+      )}
+
+      {isAdmin && (
+        <div className="space-y-2">
+          <Label htmlFor="feature-status">Status handmatig wijzigen</Label>
+          <Select
+            value={item.status}
+            onValueChange={(v) => onStatusChange(v as ItemStatus)}
+          >
+            <SelectTrigger id="feature-status" className="w-full sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FEATURE_BOARD_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {FEATURE_STATUS_LABELS[status]}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Bug, Send } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
@@ -15,14 +15,19 @@ import { useNotificationStore } from "@/store/useNotificationStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { MOCK_USERS } from "@/mock/seed";
 import { formatDate } from "@/lib/utils";
-import type { FeedbackComment, FeedbackItem, FeedbackStatus, FeedbackType } from "@/types";
-import { FEEDBACK_STATUS_LABELS, FEEDBACK_TYPE_LABELS } from "@/types";
+import type { FeedbackComment, FeedbackItem, ItemStatus } from "@/types";
+import { getStatusLabel } from "@/types";
 
 export function FeedbackDetailPage() {
   const { feedbackId } = useParams<{ feedbackId: string }>();
+  const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { getFeedbackItem, updateStatus, updateType, addComment, getComments } =
-    useFeedbackStore();
+  const {
+    getFeedbackItem,
+    updateStatus,
+    addComment,
+    getComments,
+  } = useFeedbackStore();
   const { addNotification } = useNotificationStore();
   const { getProject } = useProjectStore();
 
@@ -42,119 +47,152 @@ export function FeedbackDetailPage() {
     load();
   }, [feedbackId]);
 
-  const handleStatusChange = async (status: FeedbackStatus) => {
-    if (!item || !currentUser || currentUser.role !== "admin") return;
-    if (item.status === status) return;
-    const updated = await updateStatus(item.id, status);
-    setItem(updated);
-
-    const creator = MOCK_USERS.find((u) => u.id === item.createdBy);
+  const notifyCreator = async (
+    message: string,
+    targetItem: FeedbackItem = item!,
+  ) => {
+    if (!currentUser || !targetItem) return;
+    const creator = MOCK_USERS.find((u) => u.id === targetItem.createdBy);
     if (creator && creator.id !== currentUser.id) {
       await addNotification(
         creator.id,
         "status_change",
-        item.id,
-        `Status gewijzigd naar "${FEEDBACK_STATUS_LABELS[status]}"`,
+        targetItem.id,
+        message,
       );
-    }
-
-    if (status === "done" && currentUser.role === "admin") {
-      const project = await getProject(item.projectId);
-      if (project && item.createdBy !== project.adminId) {
-        await addNotification(
-          item.createdBy,
-          "status_change",
-          item.id,
-          "Je feedback is goedgekeurd en gemarkeerd als gedaan",
-        );
-      }
     }
   };
 
-  const handleApproval = async (approved: boolean) => {
-    if (!item || !currentUser || item.status !== "in_review") return;
+  const handleStatusChange = async (status: ItemStatus) => {
+    if (!item || !currentUser || currentUser.role !== "admin") return;
+    if (item.status === status) return;
+    const updated = await updateStatus(item.id, status);
+    setItem(updated);
+    await notifyCreator(
+      `Status gewijzigd naar "${getStatusLabel(status, item.type)}"`,
+    );
+  };
 
-    const status: FeedbackStatus = approved ? "done" : "in_progress";
+  const handleBugApproval = async (approved: boolean) => {
+    if (!item || item.type !== "bug" || item.status !== "in_review") return;
+    if (currentUser?.role !== "client") return;
+    const status: ItemStatus = approved ? "done" : "in_progress";
     const updated = await updateStatus(item.id, status);
     setItem(updated);
 
     const project = await getProject(item.projectId);
-    if (!project) return;
+    if (!project || !currentUser) return;
+
+    await addNotification(
+      project.adminId,
+      "status_change",
+      item.id,
+      approved ? "Klant heeft bug goedgekeurd" : "Klant heeft bug afgekeurd",
+    );
+  };
+
+  const handleBugUndoApproval = async () => {
+    if (!item || item.type !== "bug" || item.status !== "done") return;
+    if (
+      !window.confirm(
+        "Weet je zeker dat je de goedkeuring ongedaan wilt maken?",
+      )
+    ) {
+      return;
+    }
+    const updated = await updateStatus(item.id, "in_review");
+    setItem(updated);
+
+    const project = await getProject(item.projectId);
+    if (!project || !currentUser) return;
+    const notifyUserId =
+      currentUser.role === "client" ? project.adminId : item.createdBy;
+    if (notifyUserId !== currentUser.id) {
+      await addNotification(
+        notifyUserId,
+        "status_change",
+        item.id,
+        "Goedkeuring is ongedaan gemaakt",
+      );
+    }
+  };
+
+  const handleAdminStartWork = async () => {
+    if (!item || item.type !== "bug" || currentUser?.role !== "admin") return;
+    if (item.status !== "open") return;
+    const updated = await updateStatus(item.id, "in_progress");
+    setItem(updated);
+    if (item.createdBy !== currentUser.id) {
+      await addNotification(
+        item.createdBy,
+        "status_change",
+        item.id,
+        "Developer werkt aan je bug",
+      );
+    }
+  };
+
+  const handleAdminReadyForReview = async () => {
+    if (!item || item.type !== "bug" || currentUser?.role !== "admin") return;
+    if (item.status !== "in_progress") return;
+    const updated = await updateStatus(item.id, "in_review");
+    setItem(updated);
+    if (item.createdBy !== currentUser.id) {
+      await addNotification(
+        item.createdBy,
+        "status_change",
+        item.id,
+        "Bug klaar voor review — controleer of het is opgelost",
+      );
+    }
+  };
+
+  const handleFeatureApprove = async () => {
+    if (!item || item.type !== "feature") return;
+    const updated = await updateStatus(item.id, "approved");
+    setItem(updated);
+    await notifyCreator("Je feature-aanvraag is goedgekeurd");
+  };
+
+  const handleFeatureStart = async () => {
+    if (!item || item.type !== "feature") return;
+    const updated = await updateStatus(item.id, "in_progress");
+    setItem(updated);
+    await notifyCreator("Ontwikkeling van je feature is gestart");
+  };
+
+  const handleFeatureDeliver = () => {
+    if (!item || item.type !== "feature" || item.status !== "in_progress") return;
+    navigate(
+      `/projects/${item.projectId}/viewer?deliverFeature=${item.id}${item.pageUrl ? `&url=${encodeURIComponent(item.pageUrl)}` : ""}`,
+    );
+  };
+
+  const handleFeatureAccept = async (accepted: boolean) => {
+    if (!item || item.type !== "feature" || item.status !== "delivered") return;
+    if (currentUser?.role !== "client") return;
+    const status: ItemStatus = accepted ? "accepted" : "in_progress";
+    const updated = await updateStatus(item.id, status);
+    setItem(updated);
+
+    const project = await getProject(item.projectId);
+    if (!project || !currentUser) return;
 
     if (currentUser.role === "client") {
       await addNotification(
         project.adminId,
         "status_change",
         item.id,
-        approved
-          ? "Klant heeft feedback goedgekeurd"
-          : "Klant heeft feedback afgekeurd",
-      );
-    } else {
-      if (item.createdBy !== currentUser.id) {
-        await addNotification(
-          item.createdBy,
-          "status_change",
-          item.id,
-          approved
-            ? "Je feedback is goedgekeurd en gemarkeerd als gedaan"
-            : "Je feedback is afgekeurd en teruggezet naar in behandeling",
-        );
-      }
-    }
-  };
-
-  const handleUndoApproval = async () => {
-    if (!item || !currentUser || item.status !== "done") return;
-
-    if (
-      !window.confirm(
-        "Weet je zeker dat je de goedkeuring ongedaan wilt maken? Het item gaat terug naar ter goedkeuring.",
-      )
-    ) {
-      return;
-    }
-
-    const updated = await updateStatus(item.id, "in_review");
-    setItem(updated);
-
-    const project = await getProject(item.projectId);
-    if (!project) return;
-
-    const notifyUserId =
-      currentUser.role === "client" ? project.adminId : item.createdBy;
-
-    if (notifyUserId !== currentUser.id) {
-      await addNotification(
-        notifyUserId,
-        "status_change",
-        item.id,
-        "Goedkeuring is ongedaan gemaakt — opnieuw ter goedkeuring",
+        accepted
+          ? "Klant heeft feature geaccepteerd"
+          : "Klant heeft feature afgewezen",
       );
     }
   };
 
-  const handleClientMarkDone = async () => {
-    if (!item || !currentUser || currentUser.role !== "client") return;
-    if (item.status !== "in_progress") return;
-
-    const updated = await updateStatus(item.id, "in_review");
-    setItem(updated);
-
-    const project = await getProject(item.projectId);
-    if (project) {
-      await addNotification(
-        project.adminId,
-        "status_change",
-        item.id,
-        "Klant heeft aangegeven dat feedback gedaan is — goedkeuring vereist",
-      );
-    }
-  };
-
-  const handleTypeChange = async (type: FeedbackType) => {
-    if (!item || item.type === type) return;
-    const updated = await updateType(item.id, type);
+  const handleFeatureUndoAccept = async () => {
+    if (!item || item.type !== "feature" || item.status !== "accepted") return;
+    const updated = await updateStatus(item.id, "delivered");
     setItem(updated);
   };
 
@@ -164,12 +202,9 @@ export function FeedbackDetailPage() {
     setNewComment("");
     load();
 
-    const otherUsers = [item.createdBy].filter(
-      (id) => id !== currentUser.id,
-    );
-    for (const userId of otherUsers) {
+    if (item.createdBy !== currentUser.id) {
       await addNotification(
-        userId,
+        item.createdBy,
         "new_comment",
         item.id,
         "Nieuwe reactie op feedback",
@@ -181,8 +216,16 @@ export function FeedbackDetailPage() {
     return <p className="text-muted-foreground">Feedback laden...</p>;
   }
 
+  const isBug = item.type === "bug";
+  const primaryLabel = isBug
+    ? "Wat gaat er mis?"
+    : "Wat wordt er gebouwd?";
+  const secondaryLabel = isBug
+    ? "Hoe hoort het te werken?"
+    : "Acceptatiecriteria";
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
       <Link
         to={`/projects/${item.projectId}/feedback`}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -191,74 +234,68 @@ export function FeedbackDetailPage() {
         Terug naar bord
       </Link>
 
-      <div className="space-y-5 rounded-xl border bg-card p-6 shadow-sm">
+      <div className="space-y-5 rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={item.status} />
+          <StatusBadge item={item} />
           <FeedbackTypeBadge type={item.type} />
           <DeviceTypeBadge deviceType={item.deviceType} />
-          <span className="text-xs text-muted-foreground">
-            {item.pageUrl} — {item.cssSelector}
-          </span>
+          {item.hasLocation && item.pageUrl && (
+            <span className="text-xs text-muted-foreground">
+              {item.pageUrl}
+              {item.cssSelector ? ` — ${item.cssSelector}` : ""}
+            </span>
+          )}
+          {!item.hasLocation && (
+            <span className="text-xs text-muted-foreground">Geen locatie</span>
+          )}
         </div>
 
         <div>
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">
-            Probleem
+            {primaryLabel}
           </h2>
-          <p className="text-lg">{item.problemDescription}</p>
+          <p className="text-base sm:text-lg">{item.problemDescription}</p>
         </div>
 
         <div>
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">
-            Definition of done
+            {secondaryLabel}
           </h2>
           <p className="text-base">{item.definitionOfDone}</p>
         </div>
+
+        {item.type === "feature" && item.deliveryDescription && (
+          <div>
+            <h2 className="mb-1 text-sm font-medium text-muted-foreground">
+              Wat is hier gebouwd?
+            </h2>
+            <p className="text-base">{item.deliveryDescription}</p>
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground">
           Aangemaakt op {formatDate(item.createdAt)} door{" "}
           {MOCK_USERS.find((u) => u.id === item.createdBy)?.name ?? "Onbekend"}
         </p>
 
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">
-            Locatie op pagina
-          </h2>
-          <FeedbackScreenshot item={item} />
-          <p className="text-xs text-muted-foreground">
-            Marker op ({Math.round(item.x)}, {Math.round(item.y)}) —{" "}
-            {item.cssSelector}
-          </p>
-        </div>
-
-        {currentUser && item.type === "feature" && (
-          <div className="space-y-3 border-t border-border/60 pt-4">
-            <h3 className="text-sm font-medium">Omzetten naar bug</h3>
-            <p className="text-sm text-muted-foreground">
-              Is deze feature niet goed uitgevoerd? Zet het om naar een bug door
-              de foutlocatie op de pagina aan te geven.
+        {item.hasLocation && item.x != null && item.y != null && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Locatie op pagina
+            </h2>
+            <FeedbackScreenshot item={item} />
+            <p className="text-xs text-muted-foreground">
+              Marker op ({Math.round(item.x)}, {Math.round(item.y)})
+              {item.cssSelector ? ` — ${item.cssSelector}` : ""}
             </p>
-            <Link
-              to={`/projects/${item.projectId}/viewer?url=${encodeURIComponent(item.pageUrl)}&convertFrom=${item.id}`}
-            >
-              <Button size="sm" variant="outline">
-                <Bug className="h-4 w-4" />
-                Omzetten naar bug
-              </Button>
-            </Link>
-          </div>
-        )}
-
-        {currentUser && item.type === "bug" && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
-            <span className="text-xs font-medium text-muted-foreground">Type:</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTypeChange("feature")}
-            >
-              {FEEDBACK_TYPE_LABELS.feature}
-            </Button>
+            {item.pageUrl && (
+              <Link
+                to={`/projects/${item.projectId}/viewer?url=${encodeURIComponent(item.pageUrl)}`}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Bekijk in viewer →
+              </Link>
+            )}
           </div>
         )}
 
@@ -267,30 +304,46 @@ export function FeedbackDetailPage() {
           isAdmin={currentUser?.role === "admin"}
           isClient={currentUser?.role === "client"}
           onStatusChange={handleStatusChange}
-          onClientMarkDone={handleClientMarkDone}
-          onApproval={handleApproval}
-          onUndoApproval={handleUndoApproval}
+          onAdminStartWork={handleAdminStartWork}
+          onAdminReadyForReview={handleAdminReadyForReview}
+          onApproval={handleBugApproval}
+          onUndoApproval={handleBugUndoApproval}
+          onFeatureApprove={handleFeatureApprove}
+          onFeatureStart={handleFeatureStart}
+          onFeatureDeliver={handleFeatureDeliver}
+          onFeatureAccept={handleFeatureAccept}
+          onFeatureConvertToBug={
+            item.type === "feature" &&
+            item.status === "delivered" &&
+            currentUser?.role === "client"
+              ? () =>
+                  navigate(
+                    `/projects/${item.projectId}/viewer?convertFeature=${item.id}${item.pageUrl ? `&url=${encodeURIComponent(item.pageUrl)}` : ""}`,
+                  )
+              : undefined
+          }
+          onFeatureUndoAccept={handleFeatureUndoAccept}
         />
       </div>
 
-      <div className="space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+      <div className="space-y-4 rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">Reacties</h2>
         <CommentThread comments={comments} />
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Schrijf een reactie..."
             rows={2}
-            className="flex-1"
+            className="flex-1 text-base sm:text-sm"
           />
           <Button
-            size="icon"
-            className="shrink-0 self-end"
+            className="w-full shrink-0 sm:w-auto sm:self-end"
             disabled={!newComment.trim()}
             onClick={handleAddComment}
           >
             <Send className="h-4 w-4" />
+            Verstuur
           </Button>
         </div>
       </div>

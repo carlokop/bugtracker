@@ -33,8 +33,9 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 
 ### 4.2 Website-viewer met overlay-annotatie
 - Viewer toont de doelwebsite van het project in een frame, met een transparante overlay-laag erboven.
-- Gebruiker (klant of admin) klikt op een element op de pagina → een pin/marker wordt geplaatst → een formulier verschijnt om feedback te typen (tekst) → bij het opslaan wordt automatisch een screenshot gemaakt.
-- Elke feedback-pin registreert: de klik-coördinaten, een CSS-selector/XPath van het onderliggende element (voor herkenning ook als de pagina licht wijzigt), de pagina-URL, en **verplicht** een automatisch gemaakte screenshot die de plek op de website toont waar de feedback op van toepassing is (bv. de viewport met de pin erop gemarkeerd, of een uitsnede rond het element). Zonder screenshot kan een feedback-item niet worden opgeslagen — dit is geen optionele toevoeging maar een vast onderdeel van elk feedback-item, zodat direct zichtbaar is waar op de pagina het probleem zich voordoet.
+- **Bug melden (primair gebruik viewer):** gebruiker klikt op een element → pin/marker → formulier → automatisch screenshot. Pin, coördinaten, CSS-selector, pagina-URL en screenshot zijn **verplicht** voor bugs.
+- **Idee voorstellen (feature):** kan via een apart formulier op het feedbackbord of in de viewer, **zonder** verplichte pin. Optioneel kan de klant een locatie op de site aangeven (pin + screenshot).
+- Elke bug-pin registreert: klik-coördinaten, CSS-selector, pagina-URL en screenshot.
 - Bestaande pins worden getoond als klikbare markers op de pagina zodat je de discussie per punt kan volgen.
 - Klanten kunnen feedback geven op elk apparaattype: desktop, tablet en mobiel. De viewer/overlay moet op al deze apparaten bruikbaar zijn.
 - Bij het aanmaken van een feedback-item geeft de klant (of admin) aan op welk apparaattype de feedback van toepassing is (**Desktop / Tablet / Mobiel**). Dit apparaattype wordt bij het feedback-item opgeslagen en getoond/filterbaar in het overzicht, zodat de developer weet in welke context (viewport/apparaat) het probleem zich voordoet — dit kan namelijk afwijken van het apparaat waarop de feedback daadwerkelijk is geplaatst (bv. een klant bekijkt een screenshot van mobiel maar geeft feedback vanaf desktop).
@@ -45,10 +46,13 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 - Beide opties worden als open technisch risico benoemd in sectie 8; aanbevolen om dit met een technische spike te valideren voordat build start.
 
 ### 4.3 Feedback-beheer
-- Lijst/overzicht van alle feedback-items per project, filterbaar op status en op pagina/URL.
-- Statussen: **Open → In behandeling → Klaar (opgelost) → Geverifieerd (klant akkoord)**, plus **Afgewezen/niet van toepassing**.
-- Threaded reacties per feedback-item: klant en developer kunnen over-en-weer reageren op één item (bv. developer vraagt verduidelijking, klant reageert).
-- Wanneer developer status op "Klaar" zet, wordt de klant gevraagd te verifiëren; klant kan opnieuw feedback geven op datzelfde item als het nog niet goed is (heropent het item / nieuwe reactie-ronde).
+- Lijst/overzicht per project met tabs **Bugs | Features | Alles**, filterbaar op status en pagina/URL.
+- Twee typen feedback met aparte workflows:
+  - **Bugs:** Open → In behandeling → Ter goedkeuring → Gedaan
+  - **Features:** Aangevraagd → Goedgekeurd → In ontwikkeling → Opgeleverd → Geaccepteerd
+- Bugs kunnen gekoppeld worden aan een bestaande feature (`linked_feature_id`). "Feature slecht gebouwd" = nieuwe bug gekoppeld aan feature, geen type-wissel.
+- Threaded reacties per feedback-item: klant en developer kunnen over-en-weer reageren op één item.
+- Bij bugs: klant keurt goed of wijst af na oplevering. Bij features: admin keurt aanvraag goed; klant accepteert na oplevering.
 - Toewijzen van feedback aan een specifieke developer (bij meerdere teamleden, toekomst).
 
 ### 4.4 Notificaties & e-mail
@@ -83,7 +87,7 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 - `users` (id, email, naam, wachtwoord-hash, rol: admin/client)
 - `projects` (id, naam, doel_url, omschrijving, admin_id, aangemaakt_op)
 - `project_members` (project_id, user_id) — koppeltabel klant↔project
-- `feedback_items` (id, project_id, pagina_url, css_selector, x, y, screenshot_url **(verplicht)**, tekst, status, apparaattype: desktop/tablet/mobiel, aangemaakt_door, aangemaakt_op, bijgewerkt_op)
+- `feedback_items` (id, project_id, type: bug/feature, status, problem_description, definition_of_done, apparaattype, pagina_url/css_selector/x/y/screenshot_url **(verplicht voor bugs, optioneel voor features)**, has_location, linked_feature_id **(bugs)**, aangemaakt_door, aangemaakt_op, bijgewerkt_op)
 - `feedback_comments` (id, feedback_item_id, user_id, tekst, aangemaakt_op)
 - `notifications` (id, user_id, type, referentie_id, gelezen, aangemaakt_op)
 
@@ -106,3 +110,5 @@ Authenticatie: e-mail + wachtwoord, klanten worden uitgenodigd via e-mail met ee
 - Ondersteuning voor native mobile apps (alleen websites).
 - Automatische visuele regressie-detectie (screenshot-diffing tussen versies).
 - Facturatie/abonnementen (multi-tenant SaaS-billing).
+- Type-wissel tussen bug en feature (geen `convertFeatureToBug`).
+- Feature-prioriteit en `rejected`-status met reden.

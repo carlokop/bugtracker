@@ -1,19 +1,21 @@
 import { KanbanCard } from "@/components/feedback/KanbanCard";
 import { Badge } from "@/components/ui/badge";
 import {
+  getStatusVariant,
   statusColumnHeaderVariants,
   statusColumnVariants,
 } from "@/lib/status-styles";
 import { cn } from "@/lib/utils";
-import type { FeedbackItem, FeedbackStatus } from "@/types";
-import { FEEDBACK_STATUS_LABELS } from "@/types";
+import type { FeedbackItem, FeedbackType, ItemStatus } from "@/types";
+import { getStatusLabel } from "@/types";
 
 interface KanbanColumnProps {
-  status: FeedbackStatus;
+  status: ItemStatus;
+  itemType: FeedbackType;
   items: FeedbackItem[];
   onDragStart: (e: React.DragEvent, itemId: string) => void;
   onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, status: FeedbackStatus) => void;
+  onDrop: (e: React.DragEvent, status: ItemStatus) => void;
   onDelete: (itemId: string) => void;
   canDrag: boolean;
   isDragOver: boolean;
@@ -21,6 +23,7 @@ interface KanbanColumnProps {
 
 export function KanbanColumn({
   status,
+  itemType,
   items,
   onDragStart,
   onDragOver,
@@ -29,12 +32,16 @@ export function KanbanColumn({
   canDrag,
   isDragOver,
 }: KanbanColumnProps) {
+  const variant = getStatusVariant(status, itemType);
+
   return (
     <div
       className={cn(
-        "flex min-h-[28rem] w-72 shrink-0 flex-col rounded-xl border shadow-sm transition-all md:w-auto md:flex-1",
-        statusColumnVariants[status],
-        canDrag && isDragOver && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+        "flex min-h-[24rem] w-[min(85vw,18rem)] shrink-0 flex-col rounded-2xl border shadow-sm transition-all sm:min-h-[28rem] md:w-auto md:flex-1",
+        statusColumnVariants[variant],
+        canDrag &&
+          isDragOver &&
+          "ring-2 ring-ring ring-offset-2 ring-offset-background",
       )}
       onDragOver={canDrag ? onDragOver : undefined}
       onDrop={canDrag ? (e) => onDrop(e, status) : undefined}
@@ -43,10 +50,10 @@ export function KanbanColumn({
         <h3
           className={cn(
             "text-sm font-semibold",
-            statusColumnHeaderVariants[status],
+            statusColumnHeaderVariants[variant],
           )}
         >
-          {FEEDBACK_STATUS_LABELS[status]}
+          {getStatusLabel(status, itemType)}
         </h3>
         <Badge variant="outline" className="bg-background/80">
           {items.length}
@@ -63,7 +70,12 @@ export function KanbanColumn({
               key={item.id}
               item={item}
               canDrag={canDrag}
-              canDelete={canDrag && status === "done"}
+              canDelete={
+                canDrag &&
+                (item.type === "bug"
+                  ? item.status === "done"
+                  : item.status === "accepted")
+              }
               onDragStart={onDragStart}
               onDelete={onDelete}
             />
