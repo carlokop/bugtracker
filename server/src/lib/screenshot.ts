@@ -1,4 +1,3 @@
-import puppeteer from "puppeteer";
 import { AppError } from "./errors.js";
 import { validateProxyUrl } from "./proxy.js";
 
@@ -16,6 +15,7 @@ export async function capturePageScreenshot(
   credentials?: { user: string; pass: string } | null,
 ): Promise<Buffer> {
   const targetUrl = validateProxyUrl(rawUrl);
+  const { default: puppeteer } = await import("puppeteer");
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
