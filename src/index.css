@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+
+  --color-background: oklch(0.99 0.002 286);
+  --color-foreground: oklch(0.141 0.005 286);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.141 0.005 286);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.141 0.005 286);
+
+  --color-primary: oklch(0.488 0.243 264);
+  --color-primary-foreground: oklch(0.985 0 0);
+
+  --color-secondary: oklch(0.967 0.001 286);
+  --color-secondary-foreground: oklch(0.21 0.006 286);
+
+  --color-muted: oklch(0.967 0.001 286);
+  --color-muted-foreground: oklch(0.552 0.016 286);
+
+  --color-accent: oklch(0.967 0.001 286);
+  --color-accent-foreground: oklch(0.21 0.006 286);
+
+  --color-destructive: oklch(0.577 0.245 27);
+  --color-destructive-foreground: oklch(0.985 0 0);
+
+  --color-border: oklch(0.92 0.004 286);
+  --color-input: oklch(0.92 0.004 286);
+  --color-ring: oklch(0.488 0.243 264);
+
+  --color-sidebar: oklch(0.985 0.002 286);
+  --color-sidebar-foreground: oklch(0.141 0.005 286);
+  --color-sidebar-primary: oklch(0.488 0.243 264);
+  --color-sidebar-primary-foreground: oklch(0.985 0 0);
+  --color-sidebar-accent: oklch(0.967 0.001 286);
+  --color-sidebar-accent-foreground: oklch(0.21 0.006 286);
+  --color-sidebar-border: oklch(0.92 0.004 286);
+  --color-sidebar-ring: oklch(0.488 0.243 264);
+
+  --color-status-open: oklch(0.932 0.032 255);
+  --color-status-open-foreground: oklch(0.424 0.14 256);
+  --color-status-progress: oklch(0.945 0.055 85);
+  --color-status-progress-foreground: oklch(0.476 0.12 75);
+  --color-status-review: oklch(0.946 0.033 305);
+  --color-status-review-foreground: oklch(0.438 0.16 305);
+  --color-status-done: oklch(0.945 0.045 155);
+  --color-status-done-foreground: oklch(0.42 0.12 155);
+
+  --shadow-xs: 0 1px 2px 0 oklch(0.141 0.005 286 / 0.05);
+  --shadow-sm: 0 1px 3px 0 oklch(0.141 0.005 286 / 0.08),
+    0 1px 2px -1px oklch(0.141 0.005 286 / 0.08);
+  --shadow-md: 0 4px 6px -1px oklch(0.141 0.005 286 / 0.08),
+    0 2px 4px -2px oklch(0.141 0.005 286 / 0.06);
+  --shadow-lg: 0 10px 15px -3px oklch(0.141 0.005 286 / 0.08),
+    0 4px 6px -4px oklch(0.141 0.005 286 / 0.05);
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background font-sans text-foreground antialiased;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+  }
+}
