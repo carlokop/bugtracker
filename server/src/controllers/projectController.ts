@@ -1,10 +1,15 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { hashPassword, MIN_PASSWORD_LENGTH } from "../lib/password.js";
 import { toApiProject, toApiUser } from "../lib/mappers.js";
 import { AppError } from "../lib/errors.js";
 import { getParam } from "../lib/params.js";
+import {
+  createPasswordResetToken,
+  requireMailConfigured,
+  sendPasswordResetForUser,
+  sendPasswordSetupEmail,
+} from "../lib/passwordReset.js";
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -22,22 +27,23 @@ const updateProjectSchema = z.object({
 
 const createClientUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(MIN_PASSWORD_LENGTH, {
-    message: `Wachtwoord moet minimaal ${MIN_PASSWORD_LENGTH} tekens bevatten`,
-  }),
   name: z.string().optional(),
 });
 
 const updateClientUserSchema = z.object({
   email: z.string().email().optional(),
-  password: z
-    .string()
-    .min(MIN_PASSWORD_LENGTH, {
-      message: `Wachtwoord moet minimaal ${MIN_PASSWORD_LENGTH} tekens bevatten`,
-    })
-    .optional(),
   name: z.string().optional(),
 });
+
+async function sendClientSetupEmail(
+  userId: string,
+  email: string,
+  projectName: string,
+): Promise<void> {
+  requireMailConfigured();
+  const token = await createPasswordResetToken(userId);
+  await sendPasswordSetupEmail(email, token, projectName);
+}
 
 export async function listProjects(req: Request, res: Response): Promise<void> {
   if (!req.user) throw new AppError("Niet ingelogd", 401);
@@ -148,6 +154,14 @@ export async function createClientUser(
     throw new AppError("Ongeldige invoer", 400);
   }
 
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true },
+  });
+  if (!project) {
+    throw new AppError("Project niet gevonden", 404);
+  }
+
   const email = parsed.data.email.toLowerCase();
   const existing = await prisma.user.findUnique({
     where: { email },
@@ -165,12 +179,11 @@ export async function createClientUser(
       throw new AppError("Deze gebruiker heeft al toegang tot dit project", 409);
     }
 
-    const passwordHash = await hashPassword(parsed.data.password);
     const user = await prisma.user.update({
       where: { id: existing.id },
       data: {
         name: parsed.data.name ?? existing.name,
-        passwordHash,
+        passwordHash: null,
       },
     });
 
@@ -181,16 +194,17 @@ export async function createClientUser(
       },
     });
 
+    await sendClientSetupEmail(user.id, user.email, project.name);
+
     res.status(201).json({ user: toApiUser(user) });
     return;
   }
 
-  const passwordHash = await hashPassword(parsed.data.password);
   const user = await prisma.user.create({
     data: {
       email,
       name: parsed.data.name ?? parsed.data.email.split("@")[0],
-      passwordHash,
+      passwordHash: null,
       role: "CLIENT",
     },
   });
@@ -201,6 +215,8 @@ export async function createClientUser(
       userId: user.id,
     },
   });
+
+  await sendClientSetupEmail(user.id, user.email, project.name);
 
   res.status(201).json({ user: toApiUser(user) });
 }
@@ -237,14 +253,10 @@ export async function updateClientUser(
   const data: {
     email?: string;
     name?: string;
-    passwordHash?: string;
   } = {};
 
   if (parsed.data.email) data.email = parsed.data.email.toLowerCase();
   if (parsed.data.name) data.name = parsed.data.name;
-  if (parsed.data.password) {
-    data.passwordHash = await hashPassword(parsed.data.password);
-  }
 
   const updated = await prisma.user.update({
     where: { id: user.id },
@@ -252,6 +264,29 @@ export async function updateClientUser(
   });
 
   res.json({ user: toApiUser(updated) });
+}
+
+export async function sendClientPasswordReset(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const projectId = getParam(req, "projectId");
+  const userId = getParam(req, "userId");
+
+  const membership = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: { projectId, userId },
+    },
+    include: { user: true },
+  });
+
+  if (!membership || membership.user.role !== "CLIENT") {
+    throw new AppError("Gebruiker niet gevonden", 404);
+  }
+
+  await sendPasswordResetForUser(userId);
+
+  res.json({ ok: true, message: "Wachtwoord-reset e-mail verstuurd" });
 }
 
 export async function removeClientUser(

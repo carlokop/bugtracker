@@ -42,6 +42,13 @@ router.patch(
   requireProjectAccess,
   projectController.updateClientUser,
 );
+router.post(
+  "/:projectId/members/:userId/send-password-reset",
+  requireAuth,
+  requireRole("admin"),
+  requireProjectAccess,
+  projectController.sendClientPasswordReset,
+);
 router.delete(
   "/:projectId/members/:userId",
   requireAuth,

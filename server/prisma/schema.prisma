@@ -36,16 +36,30 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
-  passwordHash String
+  passwordHash String?
   role         UserRole
   createdAt    DateTime @default(now())
 
-  sessions          Session[]
-  adminProjects     Project[]         @relation("ProjectAdmin")
-  projectMembers    ProjectMember[]
-  feedbackItems     FeedbackItem[]    @relation("FeedbackCreator")
-  feedbackComments  FeedbackComment[]
-  notifications     Notification[]
+  sessions             Session[]
+  adminProjects        Project[]            @relation("ProjectAdmin")
+  projectMembers       ProjectMember[]
+  feedbackItems        FeedbackItem[]       @relation("FeedbackCreator")
+  feedbackComments     FeedbackComment[]
+  notifications        Notification[]
+  passwordResetTokens  PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Session {

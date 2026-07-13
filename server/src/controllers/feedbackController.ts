@@ -7,7 +7,7 @@ import {
   toPrismaDeviceType,
 } from "../lib/mappers.js";
 import { AppError } from "../lib/errors.js";
-import { notifyProjectMembers } from "../lib/notifications.js";
+import { notifyProjectMembers, notifyFeedbackStakeholders, buildCommentEmail, buildStatusChangeEmail, getStatusLabel } from "../lib/notifications.js";
 import { getParam } from "../lib/params.js";
 
 const BOARD_STATUSES = ["open", "in_progress", "in_review", "done"] as const;
@@ -262,18 +262,39 @@ export async function updateFeedbackStatus(
 
   validateStatus(existing.type, parsed.data.status);
 
+  if (existing.status === parsed.data.status) {
+    res.json({ item: toApiFeedbackItem(existing) });
+    return;
+  }
+
   const item = await prisma.feedbackItem.update({
     where: { id },
     data: { status: parsed.data.status },
+    include: {
+      project: { select: { name: true } },
+    },
   });
 
   if (req.user) {
+    const statusLabel = getStatusLabel(existing.type, parsed.data.status);
+    const notificationMessage = `${req.user.name} heeft de status gewijzigd naar ${statusLabel}`;
+
     await notifyProjectMembers(
       item.projectId,
       req.user.id,
       "status_change",
       item.id,
-      `Status gewijzigd naar ${parsed.data.status}`,
+      notificationMessage,
+      {
+        sendEmail: true,
+        email: buildStatusChangeEmail({
+          projectName: item.project.name,
+          changerName: req.user.name,
+          feedbackId: item.id,
+          feedbackTitle: item.problemDescription,
+          newStatus: statusLabel,
+        }),
+      },
     );
   }
 
@@ -281,6 +302,8 @@ export async function updateFeedbackStatus(
 }
 
 export async function deliverFeature(req: Request, res: Response): Promise<void> {
+  if (!req.user) throw new AppError("Niet ingelogd", 401);
+
   const id = getParam(req, "id");
   const parsed = deliverFeatureSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -315,7 +338,31 @@ export async function deliverFeature(req: Request, res: Response): Promise<void>
       deliveryDescription: parsed.data.deliveryDescription,
       deviceType: toPrismaDeviceType(parsed.data.deviceType),
     },
+    include: {
+      project: { select: { name: true } },
+    },
   });
+
+  const statusLabel = getStatusLabel("FEATURE", "delivered");
+  const notificationMessage = `${req.user.name} heeft de status gewijzigd naar ${statusLabel}`;
+
+  await notifyProjectMembers(
+    item.projectId,
+    req.user.id,
+    "status_change",
+    item.id,
+    notificationMessage,
+    {
+      sendEmail: true,
+      email: buildStatusChangeEmail({
+        projectName: item.project.name,
+        changerName: req.user.name,
+        feedbackId: item.id,
+        feedbackTitle: item.problemDescription,
+        newStatus: statusLabel,
+      }),
+    },
+  );
 
   res.json({ item: toApiFeedbackItem(item) });
 }
@@ -394,6 +441,9 @@ export async function addComment(req: Request, res: Response): Promise<void> {
 
   const item = await prisma.feedbackItem.findUnique({
     where: { id },
+    include: {
+      project: { select: { name: true } },
+    },
   });
 
   if (!item) {
@@ -409,13 +459,26 @@ export async function addComment(req: Request, res: Response): Promise<void> {
     include: { user: { select: { name: true } } },
   });
 
-  await notifyProjectMembers(
-    item.projectId,
-    req.user.id,
-    "new_comment",
-    item.id,
-    "Nieuwe reactie op feedback",
-  );
+  const notificationMessage = `${comment.user.name} heeft gereageerd`;
+
+  await notifyFeedbackStakeholders({
+    feedbackItemId: item.id,
+    projectId: item.projectId,
+    createdBy: item.createdBy,
+    excludeUserId: req.user.id,
+    type: "new_comment",
+    message: notificationMessage,
+    options: {
+      sendEmail: true,
+      email: buildCommentEmail({
+        projectName: item.project.name,
+        authorName: comment.user.name,
+        commentText: parsed.data.text,
+        feedbackId: item.id,
+        feedbackTitle: item.problemDescription,
+      }),
+    },
+  });
 
   res.status(201).json({ comment: toApiFeedbackComment(comment) });
 }

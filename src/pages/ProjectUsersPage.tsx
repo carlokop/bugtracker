@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { KeyRound, Lock, Pencil, Trash2, UserPlus } from "lucide-react";
+import { KeyRound, Lock, Mail, Pencil, Trash2, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
-import { MIN_PASSWORD_LENGTH, isPasswordLongEnough } from "@/lib/password";
 import type { Project, User } from "@/types";
 
 export function ProjectUsersPage() {
@@ -36,23 +35,24 @@ export function ProjectUsersPage() {
     createClientUser,
     updateClientUser,
     removeClient,
+    sendClientPasswordReset,
   } = useProjectStore();
 
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState({
     email: "",
-    password: "",
     name: "",
   });
 
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({
     email: "",
-    password: "",
     name: "",
   });
 
@@ -90,16 +90,19 @@ export function ProjectUsersPage() {
   }
 
   const handleCreate = async () => {
-    if (!projectId || !createForm.email || !createForm.password) return;
+    if (!projectId || !createForm.email) return;
     setSaving(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       await createClientUser(projectId, {
         email: createForm.email,
-        password: createForm.password,
         name: createForm.name || undefined,
       });
-      setCreateForm({ email: "", password: "", name: "" });
+      setCreateForm({ email: "", name: "" });
+      setSuccessMessage(
+        "Account aangemaakt. De klant ontvangt een e-mail om een wachtwoord in te stellen.",
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Er ging iets mis");
@@ -112,7 +115,6 @@ export function ProjectUsersPage() {
     setEditUser(user);
     setEditForm({
       email: user.email,
-      password: "",
       name: user.name,
     });
     setError(null);
@@ -126,7 +128,6 @@ export function ProjectUsersPage() {
       await updateClientUser(projectId!, editUser.id, {
         email: editForm.email,
         name: editForm.name,
-        ...(editForm.password ? { password: editForm.password } : {}),
       });
       setEditUser(null);
       await load();
@@ -134,6 +135,21 @@ export function ProjectUsersPage() {
       setError(e instanceof Error ? e.message : "Er ging iets mis");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendPasswordReset = async (userId: string) => {
+    if (!projectId) return;
+    setResettingUserId(userId);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const message = await sendClientPasswordReset(projectId, userId);
+      setSuccessMessage(message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Versturen mislukt");
+    } finally {
+      setResettingUserId(null);
     }
   };
 
@@ -292,11 +308,14 @@ export function ProjectUsersPage() {
             Klantaccount aanmaken
           </CardTitle>
           <CardDescription>
-            Maak een account aan met e-mail en wachtwoord. De klant krijgt
-            toegang tot dit project.
+            Voeg een klant toe op e-mailadres. De klant ontvangt een mail om
+            zelf een wachtwoord in te stellen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {successMessage && !editUser && (
+            <p className="text-sm text-primary">{successMessage}</p>
+          )}
           {error && !editUser && (
             <p className="text-sm text-destructive">{error}</p>
           )}
@@ -324,31 +343,12 @@ export function ProjectUsersPage() {
                 placeholder="Jan de Vries"
               />
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="create-password">Wachtwoord</Label>
-              <Input
-                id="create-password"
-                type="password"
-                value={createForm.password}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, password: e.target.value })
-                }
-                placeholder={`Minimaal ${MIN_PASSWORD_LENGTH} tekens`}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimaal {MIN_PASSWORD_LENGTH} tekens
-              </p>
-            </div>
           </div>
           <Button
             onClick={handleCreate}
-            disabled={
-              saving ||
-              !createForm.email ||
-              !isPasswordLongEnough(createForm.password)
-            }
+            disabled={saving || !createForm.email}
           >
-            Account aanmaken
+            Account aanmaken en uitnodiging versturen
           </Button>
         </CardContent>
       </Card>
@@ -379,9 +379,24 @@ export function ProjectUsersPage() {
                     <p className="text-sm font-medium">{member.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {member.email}
+                      {!member.passwordSet && (
+                        <span className="ml-2 text-amber-600">
+                          · wachtwoord nog niet ingesteld
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleSendPasswordReset(member.id)}
+                      disabled={resettingUserId === member.id}
+                      aria-label="Wachtwoord-reset versturen"
+                      title="Wachtwoord-reset versturen"
+                    >
+                      <Mail className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -411,8 +426,8 @@ export function ProjectUsersPage() {
           <DialogHeader>
             <DialogTitle>Klantaccount bewerken</DialogTitle>
             <DialogDescription>
-              Wijzig e-mail, naam of wachtwoord. Laat wachtwoord leeg om het
-              huidige wachtwoord te behouden.
+              Wijzig e-mail of naam. Voor een nieuw wachtwoord stuur je een
+              resetlink via het mail-icoon in de lijst.
             </DialogDescription>
           </DialogHeader>
           {error && editUser && (
@@ -440,27 +455,10 @@ export function ProjectUsersPage() {
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-password">Nieuw wachtwoord</Label>
-              <Input
-                id="edit-password"
-                type="password"
-                value={editForm.password}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, password: e.target.value })
-                }
-                placeholder="Laat leeg om niet te wijzigen"
-              />
-            </div>
             <Button
               className="w-full"
               onClick={handleUpdate}
-              disabled={
-                saving ||
-                !editForm.email ||
-                (editForm.password.length > 0 &&
-                  !isPasswordLongEnough(editForm.password))
-              }
+              disabled={saving || !editForm.email}
             >
               Opslaan
             </Button>

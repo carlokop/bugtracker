@@ -70,3 +70,13 @@ export async function removeClientUser(
     method: "DELETE",
   });
 }
+
+export async function sendClientPasswordReset(
+  projectId: string,
+  userId: string,
+): Promise<{ ok: boolean; message: string }> {
+  return apiRequest(
+    `/api/projects/${projectId}/members/${userId}/send-password-reset`,
+    { method: "POST" },
+  );
+}

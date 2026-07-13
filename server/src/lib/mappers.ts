@@ -15,6 +15,7 @@ export interface ApiUser {
   email: string;
   name: string;
   role: "admin" | "client";
+  passwordSet: boolean;
 }
 
 export interface ApiProject {
@@ -107,6 +108,7 @@ export function toApiUser(user: User): ApiUser {
     email: user.email,
     name: user.name,
     role: mapRole(user.role),
+    passwordSet: Boolean(user.passwordHash),
   };
 }
 

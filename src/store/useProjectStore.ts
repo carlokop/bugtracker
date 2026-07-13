@@ -36,6 +36,10 @@ interface ProjectState {
     input: UpdateClientUserInput,
   ) => Promise<User>;
   removeClient: (projectId: string, userId: string) => Promise<void>;
+  sendClientPasswordReset: (
+    projectId: string,
+    userId: string,
+  ) => Promise<string>;
   getProjectMembers: (projectId: string) => Promise<User[]>;
 }
 
@@ -141,6 +145,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   removeClient: async (projectId: string, userId: string) => {
     assertAdmin();
     await projectsApi.removeClientUser(projectId, userId);
+  },
+
+  sendClientPasswordReset: async (projectId: string, userId: string) => {
+    assertAdmin();
+    try {
+      const { message } = await projectsApi.sendClientPasswordReset(
+        projectId,
+        userId,
+      );
+      return message;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(error.message);
+      }
+      throw error;
+    }
   },
 
   getProjectMembers: async (projectId: string) => {

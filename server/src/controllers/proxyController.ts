@@ -2,8 +2,11 @@ import type { Request, Response } from "express";
 import { AppError } from "../lib/errors.js";
 import { getProjectProxyCredentials } from "../lib/projectProxyAuth.js";
 import {
+  isScriptLikeRequest,
+  isStylesheetRequest,
   rewriteCss,
   rewriteHtml,
+  rewriteJs,
   validateProxyUrl,
 } from "../lib/proxy.js";
 
@@ -26,6 +29,28 @@ function proxyErrorPage(title: string, message: string): string {
 <style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;color:#334155}
 h1{font-size:1.25rem}p{line-height:1.6;color:#64748b}</style></head>
 <body><h1>${title}</h1><p>${message}</p></body></html>`;
+}
+
+function sendAuthError(
+  res: Response,
+  credentials: { user: string; pass: string } | null,
+  isAsset: boolean,
+  status: number,
+): void {
+  if (isAsset) {
+    res.status(status).type("text/plain").send("Unauthorized");
+    return;
+  }
+
+  const html = proxyErrorPage(
+    "Toegang geweigerd",
+    credentials
+      ? "De opgeslagen inloggegevens werden geweigerd. Controleer gebruikersnaam en wachtwoord onder Klanten → Staging-toegang."
+      : 'Deze staging-omgeving vereist HTTP Basic Auth. Vul bij "Staging-toegang" op de Klanten-pagina de inloggegevens in.',
+  );
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.status(200);
+  res.send(html);
 }
 
 export async function proxyResource(
@@ -72,31 +97,18 @@ export async function proxyResource(
   const contentType =
     upstreamResponse.headers.get("content-type") ?? "application/octet-stream";
   const buffer = Buffer.from(await upstreamResponse.arrayBuffer());
+  const isAsset =
+    isScriptLikeRequest(targetUrl, contentType) ||
+    isStylesheetRequest(targetUrl, contentType);
 
   res.setHeader(
     "X-Robots-Tag",
     "noindex, nofollow, noarchive, nosnippet, noimageindex",
   );
 
-  if (looksLikeHtml(buffer, contentType)) {
-    const html = rewriteHtml(buffer.toString("utf-8"), targetUrl.href);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.status(200);
-    res.send(html);
-    return;
-  }
-
   if (!upstreamResponse.ok) {
     if (upstreamResponse.status === 401 || upstreamResponse.status === 403) {
-      const html = proxyErrorPage(
-        "Toegang geweigerd",
-        credentials
-          ? "De opgeslagen inloggegevens werden geweigerd. Controleer gebruikersnaam en wachtwoord onder Klanten → Staging-toegang."
-          : 'Deze staging-omgeving vereist HTTP Basic Auth. Vul bij "Staging-toegang" op de Klanten-pagina de inloggegevens in.',
-      );
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.status(200);
-      res.send(html);
+      sendAuthError(res, credentials, isAsset, upstreamResponse.status);
       return;
     }
 
@@ -106,10 +118,30 @@ export async function proxyResource(
     );
   }
 
-  if (contentType.includes("text/css")) {
-    const css = rewriteCss(buffer.toString("utf-8"), targetUrl.href);
+  if (looksLikeHtml(buffer, contentType)) {
+    if (isAsset) {
+      res.status(502).type("text/plain").send("Expected script or stylesheet");
+      return;
+    }
+
+    const html = rewriteHtml(buffer.toString("utf-8"), targetUrl.href, projectId);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(200);
+    res.send(html);
+    return;
+  }
+
+  if (isStylesheetRequest(targetUrl, contentType)) {
+    const css = rewriteCss(buffer.toString("utf-8"), targetUrl.href, projectId);
     res.setHeader("Content-Type", contentType);
     res.send(css);
+    return;
+  }
+
+  if (isScriptLikeRequest(targetUrl, contentType)) {
+    const js = rewriteJs(buffer.toString("utf-8"), targetUrl.href, projectId);
+    res.setHeader("Content-Type", contentType);
+    res.send(js);
     return;
   }
 

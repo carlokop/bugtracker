@@ -1,7 +1,13 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { verifyPassword } from "../lib/password.js";
+import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "../lib/password.js";
+import {
+  createPasswordResetToken,
+  sendPasswordResetEmail,
+  validatePasswordResetToken,
+} from "../lib/passwordReset.js";
+import { isMailConfigured } from "../lib/mail.js";
 import {
   createSession,
   destroySession,
@@ -15,6 +21,20 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(MIN_PASSWORD_LENGTH, {
+    message: `Wachtwoord moet minimaal ${MIN_PASSWORD_LENGTH} tekens bevatten`,
+  }),
+});
+
+const FORGOT_PASSWORD_MESSAGE =
+  "Als dit e-mailadres bij ons bekend is, ontvang je binnen enkele minuten een e-mail met instructies.";
+
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -27,7 +47,20 @@ export async function login(req: Request, res: Response): Promise<void> {
     where: { email: email.toLowerCase() },
   });
 
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  if (!user) {
+    res.status(401).json({ error: "Ongeldig e-mailadres of wachtwoord" });
+    return;
+  }
+
+  if (!user.passwordHash) {
+    res.status(401).json({
+      error:
+        "Je wachtwoord is nog niet ingesteld. Gebruik de link in je uitnodigingsmail of vraag een reset aan.",
+    });
+    return;
+  }
+
+  if (!(await verifyPassword(password, user.passwordHash))) {
     res.status(401).json({ error: "Ongeldig e-mailadres of wachtwoord" });
     return;
   }
@@ -68,4 +101,63 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
   });
 
   res.json({ users: users.map(toApiUser) });
+}
+
+export async function forgotPassword(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError("Ongeldige invoer", 400);
+  }
+
+  if (!isMailConfigured()) {
+    throw new AppError(
+      "Wachtwoord reset is momenteel niet beschikbaar. Neem contact op met de beheerder.",
+      503,
+    );
+  }
+
+  const email = parsed.data.email.toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (user) {
+    try {
+      const token = await createPasswordResetToken(user.id);
+      await sendPasswordResetEmail(user.email, token);
+    } catch (error) {
+      console.error("Wachtwoord-reset e-mail mislukt:", error);
+    }
+  }
+
+  res.json({ message: FORGOT_PASSWORD_MESSAGE });
+}
+
+export async function resetPassword(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError("Ongeldige invoer", 400);
+  }
+
+  const record = await validatePasswordResetToken(parsed.data.token);
+  if (!record) {
+    throw new AppError("Deze link is ongeldig of verlopen", 400);
+  }
+
+  const passwordHash = await hashPassword(parsed.data.password);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: record.userId },
+      data: { passwordHash },
+    }),
+    prisma.passwordResetToken.delete({ where: { id: record.id } }),
+    prisma.session.deleteMany({ where: { userId: record.userId } }),
+  ]);
+
+  res.json({ ok: true });
 }

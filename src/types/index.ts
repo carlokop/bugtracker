@@ -31,19 +31,18 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  passwordSet?: boolean;
   /** Mock only — in productie wordt een hash opgeslagen */
   password?: string;
 }
 
 export interface CreateClientUserInput {
   email: string;
-  password: string;
   name?: string;
 }
 
 export interface UpdateClientUserInput {
   email?: string;
-  password?: string;
   name?: string;
 }
 

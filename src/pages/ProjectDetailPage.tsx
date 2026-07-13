@@ -44,7 +44,6 @@ export function ProjectDetailPage() {
     setInviting(true);
     await createClientUser(projectId, {
       email: inviteEmail,
-      password: "welkom123",
     });
     setInviteEmail("");
     setInviting(false);
@@ -88,7 +87,8 @@ export function ProjectDetailPage() {
               Klanten uitnodigen
             </CardTitle>
             <CardDescription>
-              Voeg klanten toe via e-mailadres (mock invite — geen echte mail)
+              Voeg klanten toe via e-mailadres. Zij ontvangen een mail om een
+              wachtwoord in te stellen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
