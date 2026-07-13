@@ -1,3 +1,4 @@
+import "../src/lib/paths.js";
 import "../src/lib/database-env.js";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "../src/lib/password.js";
@@ -11,7 +12,9 @@ async function main() {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (!adminPassword) {
-    throw new Error("ADMIN_PASSWORD is required in server/.env");
+    throw new Error(
+      "ADMIN_PASSWORD is verplicht (zet in server/.env of Plesk env vars)",
+    );
   }
 
   if (adminPassword.length < MIN_PASSWORD_LENGTH) {
