@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -11,7 +12,6 @@ import { ViewerPage } from "@/pages/ViewerPage";
 import { FeedbackBoardPage } from "@/pages/FeedbackBoardPage";
 import { FeedbackDetailPage } from "@/pages/FeedbackDetailPage";
 import { ProjectUsersPage } from "@/pages/ProjectUsersPage";
-import { useEffect, useState } from "react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuthStore();
@@ -52,7 +52,19 @@ function ProjectRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { currentUser } = useAuthStore();
+  const { currentUser, isInitialized, initialize } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (!isInitialized) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+        Laden...
+      </div>
+    );
+  }
 
   return (
     <AppShell>

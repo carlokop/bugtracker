@@ -14,7 +14,6 @@ import { KanbanColumn } from "@/components/feedback/KanbanColumn";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFeedbackStore } from "@/store/useFeedbackStore";
-import { useNotificationStore } from "@/store/useNotificationStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import type {
   BugStatus,
@@ -27,7 +26,6 @@ import type {
 import {
   BOARD_STATUSES,
   FEATURE_BOARD_STATUSES,
-  getStatusLabel,
 } from "@/types";
 
 type BoardTab = "bugs" | "features" | "all";
@@ -39,7 +37,6 @@ export function FeedbackBoardPage() {
   const { fetchFeedback, updateStatus, deleteFeedback } =
     useFeedbackStore();
   const { getProject, getProjectsForUser } = useProjectStore();
-  const { addNotification } = useNotificationStore();
 
   const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -89,31 +86,6 @@ export function FeedbackBoardPage() {
 
     const updated = await updateStatus(itemId, newStatus);
     setItems((prev) => prev.map((i) => (i.id === itemId ? updated : i)));
-
-    if (item.createdBy !== currentUser.id) {
-      let message = `Status gewijzigd naar "${getStatusLabel(newStatus, item.type)}"`;
-
-      if (item.type === "bug") {
-        if (newStatus === "in_progress") {
-          message = "Developer werkt aan je bug";
-        } else if (newStatus === "in_review") {
-          message = "Bug klaar voor review — controleer of het is opgelost";
-        }
-      } else if (item.type === "feature") {
-        if (newStatus === "in_progress") {
-          message = "Developer werkt aan je feature";
-        } else if (newStatus === "delivered") {
-          message = "Feature opgeleverd — controleer of het naar wens is";
-        }
-      }
-
-      await addNotification(
-        item.createdBy,
-        "status_change",
-        item.id,
-        message,
-      );
-    }
   };
 
   const handleDelete = async (itemId: string) => {
@@ -181,12 +153,8 @@ export function FeedbackBoardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Feedback"
-        description={
-          isAdmin
-            ? `${items.length} item${items.length !== 1 ? "s" : ""} — sleep kaarten tussen kolommen`
-            : `${items.length} item${items.length !== 1 ? "s" : ""} — open een kaart om details te bekijken`
-        }
+        title={`Feedback — ${project.name}`}
+        description="Alle items op dit bord horen bij dit project"
       >
         <Link to={`/projects/${projectId}/viewer`}>
           <Button variant="outline" size="icon" aria-label="Terug naar viewer">

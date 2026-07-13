@@ -19,7 +19,7 @@ import type { Project, User } from "@/types";
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { currentUser } = useAuthStore();
-  const { getProject, getProjectMembers, inviteClient, removeClient } =
+  const { getProject, getProjectMembers, createClientUser, removeClient } =
     useProjectStore();
   const isAdmin = currentUser?.role === "admin";
   const [project, setProject] = useState<Project | null>(null);
@@ -42,7 +42,10 @@ export function ProjectDetailPage() {
   const handleInvite = async () => {
     if (!projectId || !inviteEmail) return;
     setInviting(true);
-    await inviteClient(projectId, inviteEmail);
+    await createClientUser(projectId, {
+      email: inviteEmail,
+      password: "welkom123",
+    });
     setInviteEmail("");
     setInviting(false);
     load();

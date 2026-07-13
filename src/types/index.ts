@@ -53,7 +53,17 @@ export interface Project {
   targetUrl: string;
   description: string;
   adminId: string;
+  proxyAuthUser?: string | null;
+  hasProxyAuth?: boolean;
   createdAt: string;
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  targetUrl?: string;
+  description?: string;
+  proxyAuthUser?: string | null;
+  proxyAuthPassword?: string | null;
 }
 
 export interface ProjectMember {
@@ -78,6 +88,7 @@ export interface FeedbackItem {
   deliveryDescription?: string | null;
   linkedFeatureId?: string;
   createdBy: string;
+  createdByName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +97,7 @@ export interface FeedbackComment {
   id: string;
   feedbackItemId: string;
   userId: string;
+  userName?: string;
   text: string;
   createdAt: string;
 }

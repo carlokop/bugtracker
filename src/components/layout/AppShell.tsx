@@ -72,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ? [
               {
                 to: `/projects/${selectedProjectId}/users`,
-                label: "Gebruikers",
+                label: "Klanten",
                 icon: Users,
               },
             ]

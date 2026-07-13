@@ -93,9 +93,7 @@ export function LoginPage() {
               </Button>
             </form>
             <p className="mt-5 rounded-xl bg-muted/60 px-3 py-2.5 text-center text-xs leading-relaxed text-muted-foreground">
-              Demo: dev@agency.nl / admin123
-              <br />
-              of klant@bakkerij.nl / klant123
+              Admin: info@websitediewerkt.nl
             </p>
           </CardContent>
         </Card>
