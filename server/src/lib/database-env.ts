@@ -48,13 +48,17 @@ function buildMariaDbUrl(): string {
 }
 
 export function configureDatabaseEnv(): void {
-  if (isProduction()) {
-    process.env.DATABASE_URL = buildMariaDbUrl();
-    return;
-  }
+  try {
+    if (isProduction()) {
+      process.env.DATABASE_URL = buildMariaDbUrl();
+      return;
+    }
 
-  if (!process.env.DATABASE_URL?.trim()) {
-    process.env.DATABASE_URL = "file:./dev.db";
+    if (!process.env.DATABASE_URL?.trim()) {
+      process.env.DATABASE_URL = "file:./dev.db";
+    }
+  } catch (error) {
+    console.error("Database configuratie mislukt:", error);
   }
 }
 
