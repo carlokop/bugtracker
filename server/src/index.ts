@@ -1,7 +1,6 @@
 import "./lib/paths.js";
 import "./lib/database-env.js";
 import express from "express";
-import { configureApp } from "./configure-app.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -11,12 +10,20 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-try {
-  configureApp(app);
-  console.log("Bugtracker app configured");
-} catch (error) {
-  console.error("Bugtracker startup mislukt:", error);
-}
+void import("./configure-app.js")
+  .then(({ configureApp }) => {
+    configureApp(app);
+    console.log("Bugtracker app configured");
+  })
+  .catch((error) => {
+    console.error("Bugtracker startup mislukt:", error);
+    app.get("/api/startup-error", (_req, res) => {
+      res.status(500).json({
+        error: "Server configuratie mislukt",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
 
 if (!isPassenger) {
   app.listen(port, () => {
